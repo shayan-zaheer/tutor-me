@@ -6,7 +6,6 @@ import { enableScreens } from 'react-native-screens';
 import HomeScreen from "./screens/HomeScreen";
 import DetailsScreen from "./screens/DetailsScreen";
 
-// Enable screens
 enableScreens();
 
 const Stack = createNativeStackNavigator();
