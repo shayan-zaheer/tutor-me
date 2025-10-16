@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "939229191665",
+    "project_id": "tutors-app-85a76",
+    "storage_bucket": "tutors-app-85a76.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:939229191665:android:53d7304b386fdfb52eb850",
+        "android_client_info": {
+          "package_name": "com.practice"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "939229191665-8698m0f3adb35i8ujrt7kci73v3ebe1r.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyApWRJYRu93m_K5ZnFNcw9qI8-D5cghs6w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "939229191665-8698m0f3adb35i8ujrt7kci73v3ebe1r.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
