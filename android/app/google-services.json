@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:939229191665:android:53d7304b386fdfb52eb850",
+        "mobilesdk_app_id": "1:939229191665:android:37c48c2f208d7c7c2eb850",
         "android_client_info": {
-          "package_name": "com.practice"
+          "package_name": "com.shayan.tutorme"
         }
       },
       "oauth_client": [

@@ -5,51 +5,29 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  Dimensions,
   ScrollView,
   Image,
 } from 'react-native';
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import auth from '@react-native-firebase/auth';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
+import { useResponsiveDesign, getScrollViewStyle } from '../../utils/responsive';
+import { WEB_CLIENT_ID } from '@env';
 
 GoogleSignin.configure({
-  webClientId: '939229191665-8698m0f3adb35i8ujrt7kci73v3ebe1r.apps.googleusercontent.com',
+  webClientId: WEB_CLIENT_ID,
   offlineAccess: true,
   hostedDomain: '',
   forceCodeForRefreshToken: true,
 });
 
-// Debug Firebase initialization
-console.log('🔥 Firebase Auth initialized:', !!auth);
-console.log('🔥 Firebase App name:', auth().app.name);
-console.log('🔥 Firebase Auth current user:', auth().currentUser);
-
-const AuthScreen = ({ navigation }: any) => {
+const LoginScreen = ({ navigation }: any) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isLogin, setIsLogin] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
-  const [screenData, setScreenData] = useState(Dimensions.get('window'));
 
-  useEffect(() => {
-    const onChange = (result: any) => {
-      setScreenData(result.window);
-    };
-
-    const subscription = Dimensions.addEventListener('change', onChange);
-    return () => subscription?.remove();
-  }, []);
-
-  const { width, height } = screenData;
-  const isSmallScreen = width < 375;
-  const isLargeScreen = width >= 414;
-  const isLandscape = width > height;
-
-  const containerPadding = isSmallScreen ? 16 : isLargeScreen ? 32 : 24;
-  const headerMargin = isSmallScreen ? 24 : 32;
-  const formMargin = isSmallScreen ? 16 : 24;
+  const responsive = useResponsiveDesign();
 
   const handleAuth = async () => {
     if (!email || !password) {
@@ -68,37 +46,19 @@ const AuthScreen = ({ navigation }: any) => {
 
     setIsLoading(true);
 
-    // Debug logging
-    console.log('🔥 Firebase Auth Debug:');
-    console.log('- Email:', email.trim());
-    console.log('- Password length:', password.length);
-    console.log('- Is Login:', isLogin);
-    console.log('- Firebase Auth instance:', auth());
-
     try {
-      if (isLogin) {
-        console.log('🔐 Attempting Firebase signInWithEmailAndPassword...');
-        const userCredential = await auth().signInWithEmailAndPassword(email.trim(), password);
-        console.log('✅ User logged in successfully:', userCredential.user);
-        Alert.alert('Success', `Welcome back, ${userCredential.user.email}!`);
-        // Navigate to Home screen after successful login
-        // navigation.replace('Home');
-      } else {
-        const userCredential = await auth().createUserWithEmailAndPassword(email.trim(), password);
-        console.log('User created successfully:', userCredential.user);
-        Alert.alert('Success', `Account created successfully for ${userCredential.user.email}!`);
-        // Navigate to Home screen after successful signup
-        // navigation.replace('Home');
-      }
+      console.log('🔐 Attempting Firebase signInWithEmailAndPassword...');
+      const userCredential = await auth().signInWithEmailAndPassword(email.trim(), password);
+      console.log('✅ User logged in successfully:', userCredential.user);
+      Alert.alert('Success', `Welcome back, ${userCredential.user.email}!`);
+      // Navigation will happen automatically when auth state changes
     } catch (error: any) {
       console.error('Authentication error:', error);
       let errorMessage = 'Authentication failed';
       
       switch (error.code) {
         case 'auth/invalid-credential':
-          errorMessage = isLogin 
-            ? 'Invalid email or password. Please check your credentials and try again.' 
-            : 'Invalid credentials provided. Please try again.';
+          errorMessage = 'Invalid email or password. Please check your credentials and try again.';
           break;
         case 'auth/email-already-in-use':
           errorMessage = 'This email is already registered. Try logging in instead.';
@@ -134,17 +94,8 @@ const AuthScreen = ({ navigation }: any) => {
   const handleGoogleSignIn = async () => {
     try {
       setIsLoading(true);
-      
-      console.log('🔍 Google Sign-In Debug:');
-      console.log('- Starting Google Sign-In process...');
-      
-      // Check if device has Google Play Services
-      console.log('- Checking Google Play Services...');
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-      console.log('✅ Google Play Services available');
 
-      // Sign out any existing Google session first
-      console.log('- Signing out existing session...');
       await GoogleSignin.signOut();
       
       console.log('- Attempting Google Sign-In...');
@@ -160,9 +111,7 @@ const AuthScreen = ({ navigation }: any) => {
       
       console.log('- Creating Firebase credential...');
       const googleCredential = auth.GoogleAuthProvider.credential(idToken);
-      
-      // Sign-in the user with the credential
-      console.log('- Signing in with Firebase...');
+
       const userCredential = await auth().signInWithCredential(googleCredential);
       
       console.log('✅ Google Sign-In successful:', userCredential.user.email);
@@ -178,7 +127,6 @@ const AuthScreen = ({ navigation }: any) => {
       
       let errorMessage = 'Google Sign-In failed';
       
-      // Handle specific Google Sign-In error codes
       switch (error.code) {
         case statusCodes.SIGN_IN_CANCELLED:
           errorMessage = 'Sign-in was cancelled by user';
@@ -214,12 +162,7 @@ const AuthScreen = ({ navigation }: any) => {
           errorMessage = 'Invalid verification ID';
           break;
         default:
-          // Check if it's a developer error
-          if (error.message?.includes('DEVELOPER_ERROR')) {
-            errorMessage = 'Configuration error: Please check SHA1 fingerprint in Firebase Console\n\nYour SHA1: 5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25';
-          } else {
-            errorMessage = error.message || 'Google Sign-In failed';
-          }
+          errorMessage = error.message || 'Google Sign-In failed';
       }
       
       Alert.alert('Google Sign-In Error', errorMessage);
@@ -232,57 +175,33 @@ const AuthScreen = ({ navigation }: any) => {
     <SafeAreaView className="flex-1 bg-blue-50">
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{
-          flexGrow: 1,
-          justifyContent: isLandscape ? 'flex-start' : 'center',
-          padding: containerPadding,
-        }}
+        contentContainerStyle={getScrollViewStyle(responsive.isLandscape, responsive.containerPadding)}
         keyboardShouldPersistTaps="handled"
       >
-        <View className="items-center" style={{ marginBottom: headerMargin }}>
+        <View className="items-center" style={{ marginBottom: responsive.headerMargin }}>
           <Text
-            className={`font-bold text-[#008080] mb-2 text-center ${
-              isSmallScreen
-                ? 'text-3xl'
-                : isLargeScreen
-                ? 'text-4xl'
-                : 'text-3xl'
-            }`}
+            className={`font-bold text-[#008080] mb-2 text-center ${responsive.fontSize['3xl']}`}
           >
-            {isLogin ? 'TutorMe' : 'Create Account 🚀'}
+            TutorMe
           </Text>
           <Text
-            className={`text-gray-600 text-center font-bold ${
-              isSmallScreen
-                ? 'text-3xl'
-                : isLargeScreen
-                ? 'text-2xl'
-                : 'text-xl'
-            }`}
+            className={`text-gray-600 text-center font-bold ${responsive.fontSize.xl}`}
             numberOfLines={1}
             adjustsFontSizeToFit={true}
           >
-            {isLogin ? 'Welcome Back' : 'Join us today'}
+            Welcome Back
           </Text>
         </View>
 
-        <View style={{ marginBottom: formMargin }}>
+        <View style={{ marginBottom: responsive.formMargin }}>
           <View className="mb-4">
             <Text
-              className={`font-medium text-black mb-2 ${
-                isSmallScreen ? 'text-xs' : 'text-sm'
-              }`}
+              className={`font-medium text-black mb-2 ${responsive.fontSize.xs}`}
             >
               Email Address
             </Text>
             <TextInput
-              className={`bg-white border border-gray-300 text-black rounded-lg ${
-                isSmallScreen
-                  ? 'p-3 text-sm'
-                  : isLargeScreen
-                  ? 'px-5 py-4 text-lg'
-                  : 'px-4 py-3 text-base'
-              }`}
+              className={`bg-white border border-gray-300 text-black rounded-lg ${responsive.spacing.input}`}
               placeholder="Enter your email"
               placeholderTextColor="#000"
               value={email}
@@ -293,23 +212,15 @@ const AuthScreen = ({ navigation }: any) => {
             />
           </View>
 
-          <View style={{ marginBottom: formMargin }}>
+          <View style={{ marginBottom: responsive.formMargin }}>
             <Text
-              className={`font-medium text-black mb-2 ${
-                isSmallScreen ? 'text-xs' : 'text-sm'
-              }`}
+              className={`font-medium text-black mb-2 ${responsive.fontSize.xs}`}
             >
               Password
             </Text>
             <View className="relative">
               <TextInput
-                className={`bg-white border border-gray-300 rounded-lg text-black ${
-                  isSmallScreen
-                    ? 'p-3 text-sm'
-                    : isLargeScreen
-                    ? 'px-5 py-4 text-lg'
-                    : 'px-4 py-3 text-base'
-                }`}
+                className={`bg-white border border-gray-300 rounded-lg text-black ${responsive.spacing.input}`}
                 placeholder="Enter your password"
                 placeholderTextColor="#000"
                 value={password}
@@ -331,7 +242,7 @@ const AuthScreen = ({ navigation }: any) => {
               <ActivityIndicator color="white" />
             ) : (
               <Text className="text-white font-semibold text-lg text-center">
-                {isLogin ? 'Sign In' : 'Sign Up'}
+                Sign In
               </Text>
             )}
           </TouchableOpacity>
@@ -349,7 +260,7 @@ const AuthScreen = ({ navigation }: any) => {
             onPress={handleGoogleSignIn}
           >
             <Image
-              source={require('../assets/google-logo.png')}
+              source={require('../../assets/google-logo.png')}
               style={{ width: 24, height: 24, marginRight: 10 }}
               resizeMode="contain"
             />
@@ -360,23 +271,19 @@ const AuthScreen = ({ navigation }: any) => {
         </View>
 
         <View className="items-center">
-          <TouchableOpacity onPress={() => setIsLogin(!isLogin)}>
+          <TouchableOpacity onPress={() => navigation.navigate('SignUp')}>
             <Text className="text-blue-600 font-medium">
-              {isLogin
-                ? "Don't have an account? Sign Up"
-                : 'Already have an account? Sign In'}
+              Don't have an account? Sign Up
             </Text>
           </TouchableOpacity>
         </View>
 
-        {isLogin && (
-          <TouchableOpacity className="items-center mt-4">
-            <Text className="text-gray-500 font-medium">Forgot Password?</Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity className="items-center mt-4">
+          <Text className="text-gray-500 font-medium">Forgot Password?</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
 };
 
-export default AuthScreen;
+export default LoginScreen;

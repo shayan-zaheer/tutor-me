@@ -1,4 +1,4 @@
-package com.practice
+package com.shayan.tutorme
 
 import android.app.Application
 import com.facebook.react.PackageList
