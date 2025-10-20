@@ -1,10 +1,9 @@
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import HomeScreen from "../screens/HomeScreen";
-import DetailsScreen from "../screens/DetailsScreen";
 import TutorListScreen from "../screens/TutorListScreen";
-import BecomeATutorScreen from "../screens/BecomeATutorScreen";
 import MyBookingsScreen from "../screens/MyBookingsScreen";
+import TutorDashboardStack from "./TutorDashboardStack";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { View, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -29,23 +28,19 @@ const TabBarIcon = ({
     },
     TutorList: {
       ionicon: focused ? "search-sharp" : "search-outline",
-      emoji: "�",
+      emoji: "🔍",
     },
     MyBookings: {
       ionicon: focused ? "calendar-sharp" : "calendar-outline",
       emoji: "📅",
     },
-    BecomeATutor: {
+    TutorDashboard: {
       ionicon: focused ? "person-sharp" : "person-outline",
       emoji: "👨‍🏫",
     },
   };
 
   const config = iconMap[routeName] || iconMap.Home;
-
-  // Debug: Log what we're trying to render
-  console.log(`🔍 Rendering icon: ${config.ionicon} for ${routeName} (focused: ${focused})`);
-
   return (
     <View className="items-center justify-center">
       <Ionicons 
@@ -82,7 +77,7 @@ export default function Tabs() {
             backgroundColor: "#fff",
             borderTopColor: "#e0e0e0",
             borderTopWidth: 1,
-            height: 60 + insets.bottom, // account for safe area
+            height: 60 + insets.bottom,
             paddingBottom: insets.bottom || 8,
             paddingTop: 8,
           },
@@ -118,11 +113,12 @@ export default function Tabs() {
           }}
         />
         <Tab.Screen
-          name="BecomeATutor"
-          component={BecomeATutorScreen}
+          name="TutorDashboard"
+          component={TutorDashboardStack}
           options={{
             title: "Tutor Dashboard",
             tabBarLabel: "Teach",
+            headerShown: false,
           }}
         />
       </Tab.Navigator>

@@ -92,7 +92,7 @@ export default function App() {
               component={LoginScreen}
               options={{
                 headerShown: true,
-                title: 'TutorMe Login',
+                title: 'Login',
                 headerStyle: { backgroundColor: '#008080' },
                 headerTintColor: '#fff',
               }}
@@ -100,7 +100,12 @@ export default function App() {
             <Stack.Screen
               name="SignUp"
               component={SignUpScreen}
-              options={{ headerShown: false }}
+              options={{
+                headerShown: true,
+                title: 'Register',
+                headerStyle: { backgroundColor: '#008080' },
+                headerTintColor: '#fff',
+              }}
             />
           </Stack.Navigator>
         )}

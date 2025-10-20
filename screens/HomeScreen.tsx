@@ -4,109 +4,157 @@ import {
   View,
   TouchableOpacity,
   ScrollView,
-  Image,
   FlatList,
 } from 'react-native';
+import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import Icon from 'react-native-vector-icons/Ionicons';
-
-interface QuickStat {
-  title: string;
-  value: string;
-  icon: string;
-  color: string;
-}
-
-interface FeaturedTutor {
-  id: string;
-  name: string;
-  subject: string;
-  rating: number;
-  image: string;
-  price: number;
-}
+import { Tutor, Profile, QuickStat } from '../types';
 
 const HomeScreen = ({ navigation }: any) => {
-  const [userRole, setUserRole] = useState<'student' | 'tutor' | 'both'>('student');
+  const [quickStats, setQuickStats] = useState<QuickStat[]>([
+    {
+      title: 'Available Tutors',
+      value: 0,
+      icon: 'people',
+      color: 'bg-blue-500',
+    },
+    {
+      title: 'Subjects',
+      value: 0,
+      icon: 'library',
+      color: 'bg-green-500',
+    },
+    {
+      title: 'Sessions Today',
+      value: 0,
+      icon: 'calendar',
+      color: 'bg-purple-500',
+    },
+    {
+      title: 'Average Rating',
+      value: 0,
+      icon: 'star',
+      color: 'bg-yellow-500',
+    },
+  ]);
+  const [tutors, setTutors] = useState<Tutor[]>([]);
   const currentUser = auth().currentUser;
 
   useEffect(() => {
-    console.log('📱 HomeScreen mounted/focused');
-    // In real app, fetch user role from Firestore
-    setUserRole('both'); // Mock: user can be both student and tutor
-    
+    const unsubscribe = firestore()
+      .collection('users')
+      .where('profile', '!=', null)
+      .onSnapshot(snapshot => {
+        const data: Tutor[] = snapshot.docs
+          .map(doc => {
+            const docData = doc.data() as Partial<Tutor>;
+        
+            const profile: Profile = {
+              bio: (docData?.profile as Profile)?.bio ?? '',
+              speciality: (docData?.profile as Profile)?.speciality ?? '',
+              rating: (docData?.profile as Profile)?.rating ?? 0,
+              totalReviews: (docData?.profile as Profile)?.totalReviews ?? 0,
+            };
+
+            return {
+              id: doc.id,
+              name: docData?.name ?? 'Unknown',
+              profile,
+              createdAt: (docData as any)?.createdAt,
+              updatedAt: (docData as any)?.updatedAt,
+            } as Tutor;
+          });
+        setTutors(data);
+      });
+
     return () => {
-      console.log('📱 HomeScreen unmounted/unfocused');
+      unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = firestore()
+      .collection('users')
+      .where("profile", "!=", null)
+      .onSnapshot(snapshot =>
+        setQuickStats(previous => {
+          const updated = [...previous];
+          snapshot.docs.forEach(doc => {
+            const data = doc.data();
+            updated[0].value = snapshot.size;
+
+            const speciality: string = data?.profile?.speciality || '';
+            const subjectsSet = new Set<string>();
+            subjectsSet.add(speciality);
+            updated[1].value = subjectsSet.size;
+
+            const totalRating = snapshot.docs.reduce((sum, d) => {
+              const rating = d.data()?.profile?.rating || 0;
+              return sum + rating;
+            }, 0);
+            updated[3].value =
+              snapshot.size > 0
+                ? parseFloat((totalRating / snapshot.size).toFixed(1))
+                : 0;
+          });
+          return updated;
+        }),
+      );
+
+    return () => {
+      unsubscribe();
     };
   }, []);
 
   const handleSignOut = () => {
-    console.log('🚪 Signing out from HomeScreen...');
     auth().signOut();
   };
 
-  const quickStats: QuickStat[] = [
-    { title: 'Available Tutors', value: '25+', icon: 'people', color: 'bg-blue-500' },
-    { title: 'Subjects', value: '15', icon: 'library', color: 'bg-green-500' },
-    { title: 'Sessions Today', value: '8', icon: 'calendar', color: 'bg-purple-500' },
-    { title: 'Average Rating', value: '4.8', icon: 'star', color: 'bg-yellow-500' },
-  ];
-
-  const featuredTutors: FeaturedTutor[] = [
-    {
-      id: '1',
-      name: 'Sarah Johnson',
-      subject: 'Mathematics',
-      rating: 4.9,
-      image: 'https://randomuser.me/api/portraits/women/1.jpg',
-      price: 25,
-    },
-    {
-      id: '2',
-      name: 'Michael Chen',
-      subject: 'Programming',
-      rating: 4.8,
-      image: 'https://randomuser.me/api/portraits/men/1.jpg',
-      price: 35,
-    },
-    {
-      id: '3',
-      name: 'Dr. Emma Wilson',
-      subject: 'Biology',
-      rating: 4.7,
-      image: 'https://randomuser.me/api/portraits/women/2.jpg',
-      price: 40,
-    },
-  ];
-
   const renderQuickStat = ({ item }: { item: QuickStat }) => (
     <View className="bg-white rounded-xl p-4 mr-4 shadow-sm min-w-[120px]">
-      <View className={`${item.color} w-12 h-12 rounded-full items-center justify-center mb-3`}>
+      <View
+        className={`${item.color} w-12 h-12 rounded-full items-center justify-center mb-3`}
+      >
         <Icon name={item.icon as any} size={24} color="white" />
       </View>
-      <Text className="text-2xl font-bold text-gray-800 mb-1">{item.value}</Text>
+      <Text className="text-2xl font-bold text-gray-800 mb-1">
+        {item.value}
+      </Text>
       <Text className="text-sm text-gray-600">{item.title}</Text>
     </View>
   );
 
-  const renderFeaturedTutor = ({ item }: { item: FeaturedTutor }) => (
+  const renderFeaturedTutor = ({ item }: { item: Tutor }) => (
     <View className="bg-white rounded-xl p-4 mr-4 shadow-sm w-48">
-      <Image source={{ uri: item.image }} className="w-16 h-16 rounded-full mb-3" />
       <Text className="text-lg font-bold text-gray-800 mb-1">{item.name}</Text>
-      <Text className="text-teal-600 font-semibold mb-2">{item.subject}</Text>
+      <View className="flex-row flex-wrap my-2">
+        {item.profile?.speciality && (
+          <View className="bg-teal-100 px-3 py-1 rounded-full mr-2 mb-2">
+            <Text className="text-teal-800 text-sm font-medium">
+              {item.profile.speciality}
+            </Text>
+          </View>
+        )}
+        {!item.profile?.speciality && (
+          <View className="bg-gray-100 px-3 py-1 rounded-full">
+            <Text className="text-gray-600 text-sm">No speciality yet</Text>
+          </View>
+        )}
+      </View>
       <View className="flex-row items-center justify-between">
         <View className="flex-row items-center">
           <Icon name="star" size={16} color="#FFD700" />
-          <Text className="ml-1 text-gray-600">{item.rating}</Text>
+          <Text className="ml-1 text-gray-600">
+            {item.profile?.rating || 0}
+          </Text>
         </View>
-        <Text className="text-gray-800 font-semibold">${item.price}/hr</Text>
       </View>
     </View>
   );
 
   return (
     <ScrollView className="flex-1 bg-gray-50">
-      {/* Welcome Header */}
       <View className="bg-teal-600 px-6 py-8 rounded-b-3xl">
         <View className="flex-row items-center justify-between">
           <View className="flex-1">
@@ -127,7 +175,6 @@ const HomeScreen = ({ navigation }: any) => {
         </View>
       </View>
 
-      {/* Quick Stats */}
       <View className="mt-6 mb-4">
         <Text className="text-xl font-bold text-gray-800 mx-6 mb-4">
           Platform Overview
@@ -137,15 +184,16 @@ const HomeScreen = ({ navigation }: any) => {
           horizontal
           showsHorizontalScrollIndicator={false}
           renderItem={renderQuickStat}
-          keyExtractor={(item) => item.title}
+          keyExtractor={item => item.title}
           contentContainerStyle={{ paddingHorizontal: 24 }}
         />
       </View>
 
-      {/* Role-based Actions */}
       <View className="mx-6 mb-6">
-        <Text className="text-xl font-bold text-gray-800 mb-4">Quick Actions</Text>
-        
+        <Text className="text-xl font-bold text-gray-800 mb-4">
+          Quick Actions
+        </Text>
+
         <View className="flex-row flex-wrap">
           <TouchableOpacity
             className="bg-white rounded-xl p-4 shadow-sm flex-1 mr-2 mb-3"
@@ -178,30 +226,27 @@ const HomeScreen = ({ navigation }: any) => {
           </TouchableOpacity>
         </View>
 
-        {(userRole === 'tutor' || userRole === 'both') && (
-          <TouchableOpacity
-            className="bg-teal-600 rounded-xl p-4 shadow-sm mt-2"
-            onPress={() => navigation.navigate('BecomeATutor')}
-          >
-            <View className="flex-row items-center">
-              <View className="bg-white/20 w-12 h-12 rounded-full items-center justify-center mr-4">
-                <Icon name="person-add" size={24} color="white" />
-              </View>
-              <View className="flex-1">
-                <Text className="text-lg font-semibold text-white mb-1">
-                  Tutor Dashboard
-                </Text>
-                <Text className="text-teal-100 text-sm">
-                  Manage your teaching schedule
-                </Text>
-              </View>
-              <Icon name="chevron-forward" size={24} color="white" />
+        <TouchableOpacity
+          className="bg-teal-600 rounded-xl p-4 shadow-sm mt-2"
+          onPress={() => navigation.navigate('TutorDashboard')}
+        >
+          <View className="flex-row items-center">
+            <View className="bg-white/20 w-12 h-12 rounded-full items-center justify-center mr-4">
+              <Icon name="person-add" size={24} color="white" />
             </View>
-          </TouchableOpacity>
-        )}
+            <View className="flex-1">
+              <Text className="text-lg font-semibold text-white mb-1">
+                Tutor Dashboard
+              </Text>
+              <Text className="text-teal-100 text-sm">
+                Manage your teaching schedule
+              </Text>
+            </View>
+            <Icon name="chevron-forward" size={24} color="white" />
+          </View>
+        </TouchableOpacity>
       </View>
 
-      {/* Featured Tutors */}
       <View className="mb-6">
         <View className="flex-row items-center justify-between mx-6 mb-4">
           <Text className="text-xl font-bold text-gray-800">Top Tutors</Text>
@@ -209,58 +254,18 @@ const HomeScreen = ({ navigation }: any) => {
             <Text className="text-teal-600 font-semibold">View All</Text>
           </TouchableOpacity>
         </View>
-        
+
         <FlatList
-          data={featuredTutors}
+          data={tutors}
           horizontal
           showsHorizontalScrollIndicator={false}
           renderItem={renderFeaturedTutor}
-          keyExtractor={(item) => item.id}
+          keyExtractor={item => item.id}
           contentContainerStyle={{ paddingHorizontal: 24 }}
         />
       </View>
-
-      {/* Recent Activity */}
-      <View className="mx-6 mb-8">
-        <Text className="text-xl font-bold text-gray-800 mb-4">Recent Activity</Text>
-        
-        <View className="bg-white rounded-xl p-4 shadow-sm">
-          <View className="flex-row items-center mb-3">
-            <View className="bg-green-100 w-10 h-10 rounded-full items-center justify-center mr-3">
-              <Icon name="checkmark-circle" size={20} color="#10b981" />
-            </View>
-            <View className="flex-1">
-              <Text className="font-semibold text-gray-800">
-                Session completed with Michael Chen
-              </Text>
-              <Text className="text-gray-600 text-sm">Programming • 2 hours ago</Text>
-            </View>
-          </View>
-          
-          <View className="flex-row items-center mb-3">
-            <View className="bg-blue-100 w-10 h-10 rounded-full items-center justify-center mr-3">
-              <Icon name="calendar" size={20} color="#3b82f6" />
-            </View>
-            <View className="flex-1">
-              <Text className="font-semibold text-gray-800">
-                Upcoming session with Sarah Johnson
-              </Text>
-              <Text className="text-gray-600 text-sm">Mathematics • Tomorrow 9:00 AM</Text>
-            </View>
-          </View>
-          
-          <TouchableOpacity
-            className="border border-teal-600 rounded-lg py-3 mt-2"
-            onPress={() => navigation.navigate('MyBookings')}
-          >
-            <Text className="text-teal-600 text-center font-semibold">
-              View All Activity
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
     </ScrollView>
-  )
-}
+  );
+};
 
 export default HomeScreen;

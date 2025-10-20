@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import auth from '@react-native-firebase/auth';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { useResponsiveDesign, getScrollViewStyle } from '../../utils/responsive';
+import { createOrUpdateUser } from '../../utils/userService';
 import { WEB_CLIENT_ID } from '@env';
 
 GoogleSignin.configure({
@@ -50,6 +51,11 @@ const LoginScreen = ({ navigation }: any) => {
       console.log('🔐 Attempting Firebase signInWithEmailAndPassword...');
       const userCredential = await auth().signInWithEmailAndPassword(email.trim(), password);
       console.log('✅ User logged in successfully:', userCredential.user);
+      try {
+        await createOrUpdateUser(userCredential.user);
+      } catch (err) {
+        console.error('Failed to create/update user document after login:', err);
+      }
       Alert.alert('Success', `Welcome back, ${userCredential.user.email}!`);
       // Navigation will happen automatically when auth state changes
     } catch (error: any) {
@@ -98,7 +104,7 @@ const LoginScreen = ({ navigation }: any) => {
 
       await GoogleSignin.signOut();
       
-      console.log('- Attempting Google Sign-In...');
+  console.log('- Attempting Google Sign-In...');
       const signInResult = await GoogleSignin.signIn();
       console.log('- Google Sign-In result:', signInResult);
       
@@ -113,6 +119,12 @@ const LoginScreen = ({ navigation }: any) => {
       const googleCredential = auth.GoogleAuthProvider.credential(idToken);
 
       const userCredential = await auth().signInWithCredential(googleCredential);
+      // create/update user in Firestore
+      try {
+        await createOrUpdateUser(userCredential.user);
+      } catch (err) {
+        console.error('Failed to create/update user document after Google sign-in:', err);
+      }
       
       console.log('✅ Google Sign-In successful:', userCredential.user.email);
       Alert.alert('Success', `Signed in with Google as ${userCredential.user.email}!`);
