@@ -120,12 +120,3 @@ export const getSpacing = (baseSpacing: number) => {
   if (isLargeScreen) return baseSpacing * 1.2;
   return baseSpacing;
 };
-
-console.log('Screen Info:', {
-  width: screenWidth,
-  height: screenHeight,
-  pixelRatio,
-  isSmallScreen,
-  isMediumScreen,
-  isLargeScreen
-});

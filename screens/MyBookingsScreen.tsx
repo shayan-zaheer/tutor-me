@@ -28,16 +28,14 @@ const MyBookingsScreen = () => {
 
     const unsubscribe = firestore()
       .collection('bookings')
-      // .where('studentId', '==', currentUser.uid)
+      .where('studentId', '==', currentUser.uid)
       .onSnapshot(async snapshot => {
         const bookingsData: Booking[] = await Promise.all(
           snapshot.docs.map(async doc => {
             const data = doc.data();
 
-            // Booking timestamp
             const createdAt = data.createdAt?.toDate?.() ?? null;
 
-            // Resolve schedule
             const scheduleRef = data.scheduleId as FirebaseFirestoreTypes.DocumentReference;
             const scheduleDoc = await scheduleRef.get();
             let scheduleData: Schedule | null = scheduleDoc.data() as Schedule | null;
@@ -53,7 +51,6 @@ const MyBookingsScreen = () => {
               };
             }
 
-            // Resolve tutor
             const tutorRef = data.tutorId as FirebaseFirestoreTypes.DocumentReference;
             const tutorDoc = await tutorRef.get();
             let tutorData: Tutor | null = tutorDoc.data() as Tutor | null;

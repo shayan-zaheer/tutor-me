@@ -1,55 +1,48 @@
-import { Button, Text, View } from 'react-native'
-import React from 'react'
+import { Text, TouchableOpacity, View } from 'react-native'
+import {useState} from 'react'
+import Icon from 'react-native-vector-icons/Ionicons';
 
 const ReviewProfileScreen = () => {
   return (
-    <View>
-      
-        <View className='flex-row justify-center'>
-            <View className='flex-col justify-center items-center'>
-                <View className='flex-row justify-between items-center'>
-                    <Text>Subjects & Expertise</Text>
-                    <Text className='text-blue-500'>Edit</Text>
+    <View className='p-4 gap-y-4'>
+      <Text className="text-xl font-bold">Review Your Profile</Text>
+        <View className='flex-row items-center justify-between rounded-lg bg-white p-4'>
+            <View className="flex-row items-center flex-1">
+                <View className='p-3 rounded-lg bg-[#CFE9F6] items-center justify-center'>
+                    <Icon name="school-outline" size={20} color="#1193D4" />
                 </View>
-                <View>
-                    <Text className="font-bold">Mathematics: </Text>
-                    <Text>Advanced Calculus, Algebra</Text>
-                    <Text className="font-bold">Physics: </Text>
-                    <Text>Quantum Mechanics, Thermodynamics</Text>
+                <View className='ml-3 gap-y-2 flex-1'>
+                    <Text className='text-lg'>Subjects & Expertise</Text>
+                    <Text className='text-gray-500'>Mathematics: Advanced Calculus, Algebra</Text>
                 </View>
             </View>
-        </View>
-      
-        <View className='flex-row justify-center'>
-            <View className='flex-col justify-center items-center'>
-                <View className='flex-row justify-between items-center'>
-                    <Text>Availability</Text>
-                    <Text className='text-blue-500'>Edit</Text>
-                </View>
-                <Text>Mon, Wed, Fri - 4:00 PM to 7:00 PM</Text>
+            <View className="flex-row items-center">
+                <Icon name="pencil" size={15} color="#1193D4" />
+                <Text className='ml-2 text-blue-500'>Edit</Text>
             </View>
         </View>
-      
-        <View className='flex-row justify-center'>
-            <View className='flex-col justify-center items-center'>
-                <View className='flex-row justify-between items-center'>
-                    <Text>Contact Details</Text>
-                    <Text className='text-blue-500'>Edit</Text>
-                </View>
-                <View>
-                    <Text className="font-bold">Email: </Text>
-                    <Text>john.doe@example.com</Text>
-                    <Text className="font-bold">Phone: </Text>
-                    <Text>(123) 456-7890</Text>
-                </View>
+        <View className='flex-row items-center justify-between rounded-lg bg-white p-4'>
+            <View className='p-3 rounded-lg bg-[#CFE9F6] items-center justify-center'>
+                <Icon name="calendar-outline" size={20} color="#1193D4" />
+            </View>
+            <View className="flex-row items-center">
+                <Icon name="pencil" size={15} color="#1193D4" />
+                <Text className='ml-2 text-blue-500'>Edit</Text>
+            </View>
+        </View>
+        <View className='flex-row items-center justify-between rounded-lg bg-white p-4'>
+            <View className='p-3 rounded-lg bg-[#CFE9F6] items-center justify-center'>
+                <Icon name="person-outline" size={20} color="#1193D4" />
+            </View>
+            <View className="flex-row items-center">
+                <Icon name="pencil" size={15} color="#1193D4" />
+                <Text className='ml-2 text-blue-500'>Edit</Text>
             </View>
         </View>
 
-        <Button
-          title="Confirm & Activate Profile"
-          onPress={() => {}}
-          color="#1193D4"
-        />
+        <TouchableOpacity className='bg-[#1193D4] rounded-lg p-4'>
+            <Text className="text-lg font-bold text-white text-center">Confirm & Activate Profile</Text>
+        </TouchableOpacity>
     </View>
   )
 }
