@@ -158,7 +158,7 @@ const HomeScreen = ({ navigation }: any) => {
       <View className="bg-teal-600 px-6 py-8 rounded-b-3xl">
         <View className="flex-row items-center justify-between">
           <View className="flex-1">
-            <Text className="text-white text-lg">Welcome back,</Text>
+            <Text className="text-white text-lg">Welcome</Text>
             <Text className="text-white text-2xl font-bold">
               {currentUser?.displayName || 'Student'}!
             </Text>

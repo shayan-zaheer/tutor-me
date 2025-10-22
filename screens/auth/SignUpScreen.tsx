@@ -13,83 +13,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import auth from '@react-native-firebase/auth';
 import {
   GoogleSignin,
-  statusCodes,
 } from '@react-native-google-signin/google-signin';
 import firestore from '@react-native-firebase/firestore';
-import { createOrUpdateUser } from '../../utils/userService';
 import {
   useResponsiveDesign,
   getScrollViewStyle,
 } from '../../utils/responsive';
 import { WEB_CLIENT_ID } from '@env';
-
-// Helper function to create user document in Firestore
-const createUserInFirestore = async (user: any, additionalData: any = {}) => {
-  try {
-    console.log('📝 Creating user document in Firestore...', user.uid);
-    
-    const userDoc = {
-      uid: user.uid,
-      email: user.email,
-      displayName: user.displayName || additionalData.displayName || 'Anonymous User',
-      photoURL: user.photoURL || '',
-      role: 'student', // Default role, can be changed later
-      createdAt: firestore.Timestamp.now(),
-      lastLoginAt: firestore.Timestamp.now(),
-      ...additionalData
-    };
-
-    // Use user.uid as document ID to ensure consistency
-    await firestore().collection('users').doc(user.uid).set(userDoc, { merge: true });
-    
-    console.log('✅ User document created successfully in Firestore');
-    return userDoc;
-  } catch (error) {
-    console.error('❌ Error creating user in Firestore:', error);
-    throw error;
-  }
-};
-
 GoogleSignin.configure({
   webClientId: WEB_CLIENT_ID,
   offlineAccess: true,
   hostedDomain: '',
   forceCodeForRefreshToken: true,
 });
-
-const addUser = async (userData: any) => {
-  try {
-    await firestore().collection('users').add(userData);
-  } catch (err) {
-    console.error('Error adding user:', err);
-  }
-};
-
-const getUsers = async () => {
-  try {
-    const snapshot = await firestore().collection('users').get();
-    const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    return users;
-  } catch (err) {
-    console.error('Error fetching users:', err);
-  }
-};
-
-const updateUser = async (userId, updatedData) => {
-  try {
-    await firestore().collection('users').doc(userId).update(updatedData);
-  } catch (err) {
-    console.error('Error updating user:', err);
-  }
-};
-
-const deleteUser = async userId => {
-  try {
-    await firestore().collection('users').doc(userId).delete();
-  } catch (err) {
-    console.error('Error deleting user:', err);
-  }
-};
 
 const SignUpScreen = ({ navigation }: any) => {
   const [fullName, setFullName] = useState('');
@@ -135,58 +71,31 @@ const SignUpScreen = ({ navigation }: any) => {
         password,
       );
 
-      await userCredential.user.updateProfile({
-        displayName: fullName.trim(),
-      });
+      const user = userCredential.user;
+      const userRef = firestore().collection('users').doc(user.uid);
+      const docSnap = await userRef.get();
 
-      console.log('User created successfully:', userCredential.user.email);
-      // create user document in Firestore
-      try {
-        await createOrUpdateUser(userCredential.user, { displayName: fullName.trim() });
-      } catch (err) {
-        console.error('Failed to create user document after signup:', err);
+      if (!docSnap.exists()) {
+        await userRef.set({
+          id: user.uid,
+          email: user.email,
+          name: fullName.trim(),
+          provider: 'email',
+          createdAt: firestore.FieldValue.serverTimestamp(),
+        });
       }
+
       Alert.alert(
         'Success',
         `Account created successfully for ${userCredential.user.email}!\n\nWelcome, ${fullName}!`,
         [
           {
             text: 'OK',
-            onPress: () => {
-              // Navigation will happen automatically when auth state changes
-              console.log('User created, auth state will change automatically');
-            },
           },
         ],
       );
     } catch (error: any) {
-      console.error('SignUp error:', error);
-      let errorMessage = 'Account creation failed';
-
-      switch (error.code) {
-        case 'auth/email-already-in-use':
-          errorMessage =
-            'This email is already registered. Try logging in instead.';
-          break;
-        case 'auth/invalid-email':
-          errorMessage = 'Invalid email address format';
-          break;
-        case 'auth/operation-not-allowed':
-          errorMessage = 'Email/password accounts are not enabled';
-          break;
-        case 'auth/weak-password':
-          errorMessage =
-            'Password is too weak. Please choose a stronger password.';
-          break;
-        case 'auth/network-request-failed':
-          errorMessage =
-            'Network error. Please check your internet connection.';
-          break;
-        default:
-          errorMessage = error.message || 'Account creation failed';
-      }
-
-      Alert.alert('SignUp Error', errorMessage);
+      Alert.alert('SignUp Error', error.message || 'Account creation failed');
     } finally {
       setIsLoading(false);
     }
@@ -196,101 +105,55 @@ const SignUpScreen = ({ navigation }: any) => {
     try {
       setIsLoading(true);
 
-      console.log('🔍 Google Sign-Up Debug:');
-      console.log('- Starting Google Sign-Up process...');
-
-      // Check if device has Google Play Services
-      console.log('- Checking Google Play Services...');
       await GoogleSignin.hasPlayServices({
         showPlayServicesUpdateDialog: true,
       });
-      console.log('✅ Google Play Services available');
 
-      // Sign out any existing Google session first
-      console.log('- Signing out existing session...');
       await GoogleSignin.signOut();
 
-      console.log('- Attempting Google Sign-In...');
       const signInResult = await GoogleSignin.signIn();
-      console.log('- Google Sign-In result:', signInResult);
-
       const idToken = signInResult.data?.idToken;
-      console.log('- ID Token received:', !!idToken);
 
       if (!idToken) {
         throw new Error('Failed to get ID token from Google Sign-In');
       }
 
-      console.log('- Creating Firebase credential...');
       const googleCredential = auth.GoogleAuthProvider.credential(idToken);
-
-      // Sign-in the user with the credential
-      console.log('- Signing up with Firebase...');
       const userCredential = await auth().signInWithCredential(
         googleCredential,
       );
 
-      console.log('✅ Google Sign-Up successful:', userCredential.user.email);
-      // create or update user document in Firestore
-      try {
-        await createOrUpdateUser(userCredential.user);
-      } catch (err) {
-        console.error('Failed to create/update user document after Google sign-in:', err);
+      const user = userCredential.user;
+      const userRef = firestore().collection('users').doc(user.uid);
+      const docSnap = await userRef.get();
+
+      let isNewUser = false;
+      if (!docSnap.exists()) {
+        await userRef.set({
+          id: user.uid,
+          email: user.email,
+          name: user.displayName,
+          provider: 'google',
+          createdAt: firestore.FieldValue.serverTimestamp(),
+        });
+        isNewUser = true;
+      } else {
+        isNewUser = false;
       }
+
       Alert.alert(
         'Success',
-        `Account created with Google!\n\nWelcome, ${userCredential.user.displayName}!`,
+        isNewUser 
+          ? `Account created with Google!\n\nWelcome, ${userCredential.user.displayName}!`
+          : `Welcome back, ${userCredential.user.displayName}!`,
         [
           {
             text: 'OK',
-            onPress: () => {
-              // Navigation will happen automatically when auth state changes
-              console.log(
-                'Google signup successful, auth state will change automatically',
-              );
-            },
           },
         ],
       );
     } catch (error: any) {
-      console.error('❌ Google Sign-Up error:', error);
-      console.error('- Error code:', error.code);
-      console.error('- Error message:', error.message);
-
-      let errorMessage = 'Google Sign-Up failed';
-
-      // Handle specific Google Sign-In error codes
-      switch (error.code) {
-        case statusCodes.SIGN_IN_CANCELLED:
-          errorMessage = 'Sign-up was cancelled by user';
-          break;
-        case statusCodes.IN_PROGRESS:
-          errorMessage = 'Sign-up is already in progress';
-          break;
-        case statusCodes.PLAY_SERVICES_NOT_AVAILABLE:
-          errorMessage = 'Google Play Services not available or outdated';
-          break;
-        case statusCodes.SIGN_IN_REQUIRED:
-          errorMessage = 'Sign-up is required';
-          break;
-        case 'auth/account-exists-with-different-credential':
-          errorMessage =
-            'An account already exists with the same email address but different sign-in credentials';
-          break;
-        case 'auth/invalid-credential':
-          errorMessage = 'The credential is invalid or has expired';
-          break;
-        case 'auth/operation-not-allowed':
-          errorMessage = 'Google Sign-In is not enabled in Firebase Console';
-          break;
-        case 'auth/user-disabled':
-          errorMessage = 'The user account has been disabled';
-          break;
-        default:
-          errorMessage = error.message || 'Google Sign-Up failed';
-      }
-
-      Alert.alert('Google Sign-Up Error', errorMessage);
+      Alert.alert('Google Sign-Up Error', error.message || 'Google Sign-Up failed');
     } finally {
       setIsLoading(false);
     }

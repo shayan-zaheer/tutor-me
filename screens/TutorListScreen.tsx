@@ -22,8 +22,10 @@ const TutorListScreen = () => {
   const currentUser = auth().currentUser;
 
   useEffect(() => {
+    const selfRef = firestore().collection("users").doc(currentUser?.uid);
     const unsubscribe = firestore()
       .collection('schedules')
+      .where("tutorId", "!=", selfRef)
       .onSnapshot(async snapshot => {
         const schedulesData: Schedule[] = snapshot.docs.map(doc => ({
           id: doc.id,
@@ -68,12 +70,28 @@ const TutorListScreen = () => {
               typeof s.tutorId === 'string' ? s.tutorId : s.tutorId?.id;
             return tutorId === tutor.id;
           });
-          const weeklySlots = tutorSchedules.flatMap(s => s.slots);
+          const weeklySlots = tutorSchedules.flatMap(s => 
+            s.slots.map((slot, index) => ({
+              ...slot,
+              id: `${s.id}-${index}`,
+              day: slot.startTime.toDate().toLocaleDateString('en-GB', { weekday: 'long' }),
+            }))
+          );
           return { ...tutor, weeklySlots };
         });
 
         setTutors(tutorsWithSlots);
       });
+
+    return () => unsubscribe();
+  }, [currentUser?.uid]);
+
+  useEffect(() => {
+    const selfRef = firestore().collection("users").doc(currentUser?.uid);
+    const unsubscribe = firestore().collection("bookings").where("student", "==", selfRef).onSnapshot(snapshot => {
+      const bookingsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setBookings(bookingsData);
+    });
 
     return () => unsubscribe();
   }, []);
@@ -94,8 +112,21 @@ const TutorListScreen = () => {
     setShowBookingModal(true);
   };
 
-  const confirmBooking = () => {
+  const confirmBooking = async () => {
     if (!selectedTutor || !selectedSlot || !currentUser) return;
+
+    const tutorRef = firestore().collection('users').doc(selectedTutor.id);
+    const selfRef = firestore().collection('users').doc(currentUser.uid);
+
+    await firestore().collection("bookings").add({
+      tutor: tutorRef,
+      student: selfRef,
+      schedule: firestore().collection("schedules").doc(selectedTutor.id),
+      ratings: 0,
+      isPaid: true,
+      review: "",
+      createdAt: firestore.FieldValue.serverTimestamp(),
+    });
 
     const updatedTutors = tutors.map(tutor => {
       if (tutor.id === selectedTutor.id) {
@@ -195,8 +226,14 @@ const TutorListScreen = () => {
                     {slot.day}
                   </Text>
                   <Text className="text-center text-gray-700">
-  {slot.startTime.toDate().toLocaleTimeString()} - {slot.endTime.toDate().toLocaleTimeString()}
-</Text>
+                    {slot.startTime.toDate().toLocaleTimeString('en-GB', {
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })} - {slot.endTime.toDate().toLocaleTimeString('en-GB', {
+                      hour: '2-digit', 
+                      minute: '2-digit'
+                    })}
+                  </Text>
 
                   <Text className="text-center text-teal-600 font-semibold">
                     ${slot.price}
@@ -250,8 +287,13 @@ const TutorListScreen = () => {
                   Book a session with {selectedTutor.name}?
                 </Text>
                 <Text className="font-semibold text-center mb-4">
-                  {selectedSlot.day} at {selectedSlot.startTime.toDate().toLocaleTimeString()} -{' '}
-                  {selectedSlot.endTime.toDate().toLocaleTimeString()}
+                  {selectedSlot.day} at {selectedSlot.startTime.toDate().toLocaleTimeString('en-GB', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })} - {selectedSlot.endTime.toDate().toLocaleTimeString('en-GB', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
                 </Text>
                 <Text className="text-center text-lg font-bold text-teal-600 mb-6">
                   Total: ${selectedSlot.price}

@@ -1,9 +1,9 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import TutorDashboardHome from '../screens/TutorDashboardHome.tsx';
-import AvailabilityScreenme from '../screens/AvailabilityScreenme';
-import ReviewProfileScreenme from '../screens/ReviewProfileScreenme';
-import ContactInfoScreenme from '../screens/ContactInfoScreenme';
+import AvailabilityScreen from '../screens/tutor-onboarding/AvailabilityScreen.tsx';
+import ReviewProfileScreen from '../screens/tutor-onboarding/ReviewProfileScreen.tsx';
+import ContactInfoScreen from '../screens/tutor-onboarding/ContactInfoScreen.tsx';
 
 const Stack = createNativeStackNavigator();
 
@@ -22,18 +22,18 @@ export default function TutorDashboardStack() {
         options={{ title: 'Tutor Dashboard' }}
       />
       <Stack.Screen 
-        name="AvailabilityScreenme" 
-        component={AvailabilityScreenme}
+        name="AvailabilityScreen" 
+        component={AvailabilityScreen}
         options={{ title: 'Set Availability' }}
       />
       <Stack.Screen 
-        name="ReviewProfileScreenme" 
-        component={ReviewProfileScreenme}
+        name="ReviewProfileScreen" 
+        component={ReviewProfileScreen}
         options={{ title: 'Review Profile' }}
       />
       <Stack.Screen 
-        name="ContactInfoScreenme" 
-        component={ContactInfoScreenme}
+        name="ContactInfoScreen" 
+        component={ContactInfoScreen}
         options={{ title: 'Contact Information' }}
       />
     </Stack.Navigator>
