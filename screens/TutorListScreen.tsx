@@ -8,6 +8,7 @@ import {
   Modal,
   Alert,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
@@ -16,89 +17,105 @@ import { Schedule, Tutor } from '../types';
 
 const TutorListScreen = () => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [selectedTutor, setSelectedTutor] = useState<Tutor | null>(null);
   const [showBookingModal, setShowBookingModal] = useState(false);
-  const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<any | null>(null);
   const currentUser = auth().currentUser;
 
   useEffect(() => {
-    const selfRef = firestore().collection("users").doc(currentUser?.uid);
+    setIsLoading(true);
+    const selfRef = firestore().collection('users').doc(currentUser?.uid);
     const unsubscribe = firestore()
       .collection('schedules')
-      .where("tutorId", "!=", selfRef)
+      .where('tutorId', '!=', selfRef)
       .onSnapshot(async snapshot => {
-        const schedulesData: Schedule[] = snapshot.docs.map(doc => ({
-          id: doc.id,
-          tutorId: doc.data().tutorId,
-          slots: doc.data().slots ?? [],
-        }));
+        try {
+          const schedulesData: Schedule[] = snapshot.docs.map(doc => ({
+            id: doc.id,
+            tutorId: doc.data().tutorId,
+            slots: doc.data().slots ?? [],
+          }));
 
-        const tutorIds = [
-          ...new Set(
-            schedulesData
-              .map(s =>
-                typeof s.tutorId === 'string' ? s.tutorId : s.tutorId?.id,
-              )
-              .filter(Boolean) as string[],
-          ),
-        ];
+          const tutorIds = [
+            ...new Set(
+              schedulesData
+                .map(s =>
+                  typeof s.tutorId === 'string' ? s.tutorId : s.tutorId?.id,
+                )
+                .filter(Boolean) as string[],
+            ),
+          ];
 
-        if (tutorIds.length === 0) {
-          setTutors([]);
-          return;
-        }
+          if (tutorIds.length === 0) {
+            setTutors([]);
+            return;
+          }
 
-        let tutorsData: Tutor[] = [];
-        const batchSize = 10;
-        for (let i = 0; i < tutorIds.length; i += batchSize) {
-          const chunk = tutorIds.slice(i, i + batchSize);
-          const tutorsSnapshot = await firestore()
-            .collection('users')
-            .where(firestore.FieldPath.documentId(), 'in', chunk)
-            .get();
-
-          tutorsData.push(
-            ...tutorsSnapshot.docs
-              .map(doc => ({ id: doc.id, ...doc.data() } as Tutor))
-              .filter(t => t.profile),
-          );
-        }
-
-        const tutorsWithSlots = tutorsData.map(tutor => {
-          const tutorSchedules = schedulesData.filter(s => {
-            const tutorId =
-              typeof s.tutorId === 'string' ? s.tutorId : s.tutorId?.id;
-            return tutorId === tutor.id;
+          const bookingsSnapshot = await firestore().collection('bookings').get();
+          const bookedSlots = new Set();
+          
+          bookingsSnapshot.docs.forEach(doc => {
+            const booking = doc.data();
+            if (booking.schedule && booking.bookedSlot) {
+              const slotKey = `${booking.schedule.id}-${booking.bookedSlot.startTime.toMillis()}-${booking.bookedSlot.endTime.toMillis()}`;//unique across days
+              bookedSlots.add(slotKey);
+            }
           });
-          const weeklySlots = tutorSchedules.flatMap(s => 
-            s.slots.map((slot, index) => ({
-              ...slot,
-              id: `${s.id}-${index}`,
-              day: slot.startTime.toDate().toLocaleDateString('en-GB', { weekday: 'long' }),
-            }))
-          );
-          return { ...tutor, weeklySlots };
-        });
 
-        setTutors(tutorsWithSlots);
+          let tutorsData: Tutor[] = [];
+          const batchSize = 10;
+          for (let i = 0; i < tutorIds.length; i += batchSize) {
+            const chunk = tutorIds.slice(i, i + batchSize);
+            const tutorsSnapshot = await firestore()
+              .collection('users')
+              .where(firestore.FieldPath.documentId(), 'in', chunk)
+              .get();
+
+            tutorsData.push(
+              ...tutorsSnapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() } as Tutor))
+                .filter(t => t.profile),
+            );
+          }
+
+          const tutorsWithSlots = tutorsData.map(tutor => {
+            const tutorSchedules = schedulesData.filter(s => {
+              const tutorId =
+                typeof s.tutorId === 'string' ? s.tutorId : s.tutorId?.id;
+              return tutorId === tutor.id;
+            });
+            const weeklySlots = tutorSchedules.flatMap(s =>
+              s.slots.map((slot, index) => {
+                const slotKey = `${s.id}-${slot.startTime.toMillis()}-${slot.endTime.toMillis()}`;
+                return {
+                  ...slot,
+                  id: `${s.id}-${index}`,
+                  scheduleId: s.id,
+                  day: slot.startTime
+                    .toDate()
+                    .toLocaleDateString('en-GB', { weekday: 'long' }),
+                  isBooked: bookedSlots.has(slotKey),
+                };
+              }),
+            );
+            return { ...tutor, weeklySlots };
+          });
+
+          setTutors(tutorsWithSlots);
+        } catch (err) {
+          console.error('Error loading tutors:', err);
+        } finally {
+          setIsLoading(false);
+        }
       });
 
     return () => unsubscribe();
   }, [currentUser?.uid]);
 
-  useEffect(() => {
-    const selfRef = firestore().collection("users").doc(currentUser?.uid);
-    const unsubscribe = firestore().collection("bookings").where("student", "==", selfRef).onSnapshot(snapshot => {
-      const bookingsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setBookings(bookingsData);
-    });
-
-    return () => unsubscribe();
-  }, []);
-
   const [tutors, setTutors] = useState<Tutor[]>([]);
 
-  const handleBookSlot = (tutor: Tutor, slot: TimeSlot) => {
+  const handleBookSlot = (tutor: Tutor, slot: any) => {
     if (slot.isBooked) {
       Alert.alert(
         'Slot Unavailable',
@@ -112,46 +129,101 @@ const TutorListScreen = () => {
     setShowBookingModal(true);
   };
 
+  const filterSearch = () => {
+    const data = [...tutors];
+    const filtered = data.filter(tutor => {
+      const nameMatch = tutor.name
+        ?.toLowerCase()
+        .includes(searchQuery.toLowerCase());
+      const specialityMatch = tutor.profile?.speciality
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase());
+      return nameMatch || specialityMatch;
+    })
+    setTutors(filtered);
+  }
+
   const confirmBooking = async () => {
     if (!selectedTutor || !selectedSlot || !currentUser) return;
 
-    const tutorRef = firestore().collection('users').doc(selectedTutor.id);
-    const selfRef = firestore().collection('users').doc(currentUser.uid);
+    try {
+      const tutorRef = firestore().collection('users').doc(selectedTutor.id);
+      const selfRef = firestore().collection('users').doc(currentUser.uid);
 
-    await firestore().collection("bookings").add({
-      tutor: tutorRef,
-      student: selfRef,
-      schedule: firestore().collection("schedules").doc(selectedTutor.id),
-      ratings: 0,
-      isPaid: true,
-      review: "",
-      createdAt: firestore.FieldValue.serverTimestamp(),
-    });
+      const studentBookingsSnapshot = await firestore()
+        .collection('bookings')
+        .where('student', '==', selfRef)
+        .get();
 
-    const updatedTutors = tutors.map(tutor => {
-      if (tutor.id === selectedTutor.id) {
-        const updatedSlots = tutor.weeklySlots.map(slot => {
-          if (slot.id === selectedSlot.id) {
-            return { ...slot, isBooked: true, bookedBy: currentUser.uid };
-          }
-          return slot;
-        });
-        return { ...tutor, weeklySlots: updatedSlots };
+      const hasTimeConflict = studentBookingsSnapshot.docs.some(doc => {
+        const booking = doc.data();
+        if (booking.bookedSlot) {
+          const existingStart = booking.bookedSlot.startTime.toDate();
+          const existingEnd = booking.bookedSlot.endTime.toDate();
+          const newStart = selectedSlot.startTime.toDate();
+          const newEnd = selectedSlot.endTime.toDate();
+
+          return (
+            (newStart >= existingStart && newStart < existingEnd) ||
+            (newEnd > existingStart && newEnd <= existingEnd) ||
+            (newStart <= existingStart && newEnd >= existingEnd)
+          );
+        }
+        return false;
+      });
+
+      if (hasTimeConflict) {
+        Alert.alert(
+          'Booking Conflict',
+          'You already have a booking at this time. Please choose a different time slot.',
+        );
+        return;
       }
-      return tutor;
-    });
 
-    setTutors(updatedTutors);
-    setShowBookingModal(false);
+      const schedulesSnapshot = await firestore()
+        .collection('schedules')
+        .where('tutorId', '==', tutorRef)
+        .get();
 
-    Alert.alert(
-      'Booking Confirmed!',
-      `Your session with ${selectedTutor.name} on ${selectedSlot.day} at ${selectedSlot.startTime} has been booked.`,
-      [{ text: 'OK' }],
-    );
+      if (schedulesSnapshot.empty) {
+        Alert.alert('Error', 'Schedule not found');
+        return;
+      }
 
-    setSelectedTutor(null);
-    setSelectedSlot(null);
+      const scheduleDoc = schedulesSnapshot.docs[0];
+      const scheduleRef = firestore().collection('schedules').doc(scheduleDoc.id);
+
+      await firestore()
+        .collection('bookings')
+        .add({
+          tutor: tutorRef,
+          student: selfRef,
+          schedule: scheduleRef,
+          bookedSlot: {
+            startTime: selectedSlot.startTime,
+            endTime: selectedSlot.endTime,
+            price: selectedSlot.price,
+          },
+          ratings: 0,
+          isPaid: true,
+          review: '',
+          createdAt: firestore.FieldValue.serverTimestamp(),
+        });
+
+      setShowBookingModal(false);
+
+      Alert.alert(
+        'Booking Confirmed!',
+        `Your session with ${selectedTutor.name} on ${selectedSlot.day} has been booked.`,
+        [{ text: 'OK' }],
+      );
+
+      setSelectedTutor(null);
+      setSelectedSlot(null);
+    } catch (error) {
+      console.error('Booking error:', error);
+      Alert.alert('Error', 'Failed to book the session. Please try again.');
+    }
   };
 
   const renderStars = (rating: number) => {
@@ -184,7 +256,7 @@ const TutorListScreen = () => {
     return stars;
   };
 
-  const renderTutorCard = ({ item: tutor }) => (
+  const renderTutorCard = ({ item: tutor }: { item: any }) => (
     <View className="bg-white mx-4 mb-4 rounded-xl shadow-lg">
       <View className="p-4">
         <View className="flex-row items-center mb-3">
@@ -211,7 +283,7 @@ const TutorListScreen = () => {
           </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View className="flex-row">
-              {tutor.weeklySlots.map(slot => (
+              {tutor.weeklySlots.map((slot: any) => (
                 <TouchableOpacity
                   key={slot.id}
                   className={`mr-3 p-3 rounded-lg min-w-[120px] ${
@@ -228,10 +300,12 @@ const TutorListScreen = () => {
                   <Text className="text-center text-gray-700">
                     {slot.startTime.toDate().toLocaleTimeString('en-GB', {
                       hour: '2-digit',
-                      minute: '2-digit'
-                    })} - {slot.endTime.toDate().toLocaleTimeString('en-GB', {
-                      hour: '2-digit', 
-                      minute: '2-digit'
+                      minute: '2-digit',
+                    })}{' '}
+                    -
+                    {slot.endTime.toDate().toLocaleTimeString('en-GB', {
+                      hour: '2-digit',
+                      minute: '2-digit',
                     })}
                   </Text>
 
@@ -259,20 +333,30 @@ const TutorListScreen = () => {
           <Icon name="search" size={20} color="#666" />
           <TextInput
             placeholder="Search tutors or subjects..."
+            placeholderTextColor={"#666"}
             value={searchQuery}
-            onChangeText={setSearchQuery}
+            onChangeText={(text) => {
+              setSearchQuery(text);
+              filterSearch();
+            }}
             className="flex-1 ml-2 text-gray-800"
           />
         </View>
       </View>
 
-      <FlatList
-        data={tutors}
-        keyExtractor={item => item.id}
-        renderItem={renderTutorCard}
-        className="py-4"
-        showsVerticalScrollIndicator={false}
-      />
+      {isLoading ? (
+        <View className="flex-1 justify-center items-center">
+          <ActivityIndicator size="large" color="#008080" />
+        </View>
+      ) : (
+        <FlatList
+          data={tutors}
+          keyExtractor={item => item.id}
+          renderItem={renderTutorCard}
+          className="py-4"
+          showsVerticalScrollIndicator={false}
+        />
+      )}
 
       <Modal visible={showBookingModal} transparent animationType="slide">
         <View className="flex-1 bg-black/50 justify-center items-center px-4">
@@ -287,12 +371,15 @@ const TutorListScreen = () => {
                   Book a session with {selectedTutor.name}?
                 </Text>
                 <Text className="font-semibold text-center mb-4">
-                  {selectedSlot.day} at {selectedSlot.startTime.toDate().toLocaleTimeString('en-GB', {
+                  {selectedSlot.day} at
+                  {selectedSlot.startTime.toDate().toLocaleTimeString('en-GB', {
                     hour: '2-digit',
-                    minute: '2-digit'
-                  })} - {selectedSlot.endTime.toDate().toLocaleTimeString('en-GB', {
+                    minute: '2-digit',
+                  })}
+                  -{' '}
+                  {selectedSlot.endTime.toDate().toLocaleTimeString('en-GB', {
                     hour: '2-digit',
-                    minute: '2-digit'
+                    minute: '2-digit',
                   })}
                 </Text>
                 <Text className="text-center text-lg font-bold text-teal-600 mb-6">

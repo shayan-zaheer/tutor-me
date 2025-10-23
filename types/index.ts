@@ -28,17 +28,21 @@ export interface Slot {
 }
 
 export interface Booking {
-  tutor: User;
-  student: User;
-  schedule: Schedule;
-  ratings: number;
+  id: string;
+  tutor: User | FirebaseFirestoreTypes.DocumentReference;
+  student: User | FirebaseFirestoreTypes.DocumentReference;
+  schedule: Schedule | FirebaseFirestoreTypes.DocumentReference;
+  bookedSlot: Slot;
+  ratings?: number;
+  rating?: number;
   isPaid: boolean;
-  review: string;
+  review?: string;
   createdAt: FirebaseFirestoreTypes.Timestamp;
 }
 
 export interface User {
   id: string;
+  name?: string;
   email: string | null;
   profile?: Profile;
   createdAt: FirebaseFirestoreTypes.Timestamp;

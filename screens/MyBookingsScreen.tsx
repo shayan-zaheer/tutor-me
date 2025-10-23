@@ -8,70 +8,84 @@ import {
   Modal,
   TextInput,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
-import firestore, { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
+import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { Booking, Tutor, Schedule, TimeSlot } from '../types';
+import { Booking } from '../types';
 
 const MyBookingsScreen = () => {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [rating, setRating] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
   const [review, setReview] = useState('');
   const currentUser = auth().currentUser;
 
-  // Fetch bookings with populated schedule & tutor
   useEffect(() => {
     if (!currentUser) return;
 
+    setIsLoading(true);
+
+    const selfRef = firestore().collection("users").doc(currentUser?.uid);
     const unsubscribe = firestore()
       .collection('bookings')
-      .where('studentId', '==', currentUser.uid)
+      .where('student', '==', selfRef)
       .onSnapshot(async snapshot => {
-        const bookingsData: Booking[] = await Promise.all(
-          snapshot.docs.map(async doc => {
-            const data = doc.data();
+        const bookingsData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Booking[];
+        console.log("Fetched Bookings:", bookingsData);
 
-            const createdAt = data.createdAt?.toDate?.() ?? null;
+        if (bookingsData.length === 0) {
+          setBookings([]);
+          return;
+        }
 
-            const scheduleRef = data.scheduleId as FirebaseFirestoreTypes.DocumentReference;
-            const scheduleDoc = await scheduleRef.get();
-            let scheduleData: Schedule | null = scheduleDoc.data() as Schedule | null;
+        const tutorRefs = [...new Set(
+          bookingsData
+            .map((booking: any) => booking.tutor)
+            .filter(Boolean)
+        )];
 
-            if (scheduleData?.slots) {
-              scheduleData = {
-                ...scheduleData,
-                slots: scheduleData.slots.map((slot: any) => ({
-                  ...slot,
-                  startTime: slot.startTime?.toDate?.() ?? new Date(),
-                  endTime: slot.endTime?.toDate?.() ?? new Date(),
-                })),
-              };
-            }
+        if (tutorRefs.length === 0) {
+          setBookings(bookingsData);
+          return;
+        }
 
-            const tutorRef = data.tutorId as FirebaseFirestoreTypes.DocumentReference;
-            const tutorDoc = await tutorRef.get();
-            let tutorData: Tutor | null = tutorDoc.data() as Tutor | null;
-
-            if (tutorData?.createdAt) tutorData.createdAt = tutorData.createdAt.toDate();
-            if (tutorData?.updatedAt) tutorData.updatedAt = tutorData.updatedAt.toDate();
-
-            return {
-              id: doc.id,
-              createdAt,
-              isPaid: data.isPaid ?? false,
-              rating: data.ratings ?? 0,
-              review: data.review ?? '',
-              status: data.status ?? 'upcoming',
-              schedule: scheduleData ? { id: scheduleDoc.id, ...scheduleData } : null,
-              tutor: tutorData ? { id: tutorDoc.id, ...tutorData } : null,
-            } as Booking;
-          })
+        const tutorIds = tutorRefs.map((ref: any) => 
+          typeof ref === 'string' ? ref : ref.id
         );
 
-        setBookings(bookingsData);
+        let tutorsData: any[] = [];
+        const batchSize = 10;
+        for (let i = 0; i < tutorIds.length; i += batchSize) {
+          const chunk = tutorIds.slice(i, i + batchSize);
+          const tutorsSnapshot = await firestore()
+            .collection('users')
+            .where(firestore.FieldPath.documentId(), 'in', chunk)
+            .get();
+          
+          tutorsData.push(
+            ...tutorsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+          );
+        }
+
+        const populatedBookings = bookingsData.map((booking: any) => ({
+          ...booking,
+          tutor: tutorsData.find(tutor => {
+            const tutorRefId = typeof booking.tutor === 'string' 
+              ? booking.tutor 
+              : booking.tutor?.id;
+            return tutor.id === tutorRefId;
+          })
+        })) as Booking[];
+
+        setBookings(populatedBookings);
+        setIsLoading(false);
       });
 
     return () => unsubscribe();
@@ -79,7 +93,7 @@ const MyBookingsScreen = () => {
 
   const handleRate = (booking: Booking) => {
     setSelectedBooking(booking);
-    setRating(booking.ratings || 0);
+    setRating(booking.rating || booking.ratings || 0);
     setReview(booking.review || '');
     setShowRatingModal(true);
   };
@@ -105,47 +119,6 @@ const MyBookingsScreen = () => {
     Alert.alert('Thank You!', 'Your rating has been submitted successfully.');
   };
 
-  // Cancel booking
-  const cancelBooking = (booking: Booking) => {
-    Alert.alert(
-      'Cancel Booking',
-      `Are you sure you want to cancel your session with ${booking.tutor?.name}?`,
-      [
-        { text: 'No', style: 'cancel' },
-        {
-          text: 'Yes, Cancel',
-          style: 'destructive',
-          onPress: () => {
-            const updatedBookings = bookings.map(b =>
-              b.id === booking.id ? { ...b, status: 'cancelled' } : b
-            );
-            setBookings(updatedBookings);
-            Alert.alert('Cancelled', 'Your booking has been cancelled.');
-          },
-        },
-      ]
-    );
-  };
-
-  // Helpers
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'upcoming': return 'text-blue-600';
-      case 'completed': return 'text-green-600';
-      case 'cancelled': return 'text-red-600';
-      default: return 'text-gray-600';
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'upcoming': return 'time-outline';
-      case 'completed': return 'checkmark-circle';
-      case 'cancelled': return 'close-circle';
-      default: return 'ellipse-outline';
-    }
-  };
-
   const renderStars = (currentRating: number, interactive = false) => {
     return Array.from({ length: 5 }, (_, i) => (
       <TouchableOpacity
@@ -162,8 +135,7 @@ const MyBookingsScreen = () => {
     ));
   };
 
-  // Booking Card
-  const renderBookingCard = ({ item: booking }: { item: Booking }) => (
+  const renderBookingCard = ({ item: booking }: { item: any }) => (
     <View className="bg-white mx-4 mb-4 rounded-xl shadow-lg">
       <View className="p-6">
         <View className="flex-row justify-between items-start mb-4">
@@ -175,14 +147,18 @@ const MyBookingsScreen = () => {
               {booking.tutor?.profile?.speciality ?? 'No Speciality'}
             </Text>
 
-            {booking.schedule?.slots?.map((slot: TimeSlot, idx: number) => (
-              <View className="flex-row items-center mb-1" key={idx}>
+              <View className="flex-row items-center mb-1" >
                 <Icon name="calendar-outline" size={16} color="#666" />
                 <Text className="ml-2 text-gray-700">
-                  {slot.startTime.toLocaleString()} - {slot.endTime.toLocaleString()} | ${slot.price}
+                  {booking.bookedSlot.startTime.toDate().toLocaleDateString("en-GB")} | {booking.bookedSlot.startTime.toDate().toLocaleTimeString('en-GB', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })} - {booking.bookedSlot.endTime.toDate().toLocaleTimeString('en-GB', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })} | {'$' + booking.bookedSlot.price}
                 </Text>
               </View>
-            ))}
 
             <View className="flex-row items-center mb-3">
               <Icon name="card-outline" size={16} color="#666" />
@@ -191,28 +167,8 @@ const MyBookingsScreen = () => {
               </Text>
             </View>
           </View>
-
-          <View className="items-end">
-            <View className="flex-row items-center mb-2">
-              <Icon
-                name={getStatusIcon(booking.status)}
-                size={20}
-                color={
-                  booking.status === 'upcoming'
-                    ? '#3b82f6'
-                    : booking.status === 'completed'
-                    ? '#10b981'
-                    : '#ef4444'
-                }
-              />
-              <Text className={`ml-2 font-semibold capitalize ${getStatusColor(booking.status)}`}>
-                {booking.status}
-              </Text>
-            </View>
-          </View>
         </View>
 
-        {booking.status === 'completed' && (
           <View className="border-t border-gray-200 pt-4">
             {booking.rating ? (
               <View>
@@ -234,25 +190,11 @@ const MyBookingsScreen = () => {
                 onPress={() => handleRate(booking)}
               >
                 <Text className="text-white text-center font-semibold">
-                  ⭐ Rate This Session
+                  Rate This Session
                 </Text>
               </TouchableOpacity>
             )}
           </View>
-        )}
-
-        {booking.status === 'upcoming' && (
-          <View className="border-t border-gray-200 pt-4">
-            <TouchableOpacity
-              className="bg-red-500 py-3 px-4 rounded-lg"
-              onPress={() => cancelBooking(booking)}
-            >
-              <Text className="text-white text-center font-semibold">
-                Cancel Booking
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
       </View>
     </View>
   );
@@ -271,12 +213,13 @@ const MyBookingsScreen = () => {
     );
   }
 
-  const upcomingBookings = bookings.filter(b => b.status === 'upcoming');
-  const pastBookings = bookings.filter(b => b.status === 'completed' || b.status === 'cancelled');
-
   return (
     <View className="flex-1 bg-gray-50">
-      {bookings.length === 0 ? (
+      {isLoading ? (
+        <View className='flex-1 justify-center items-center'>
+          <ActivityIndicator size="large" color="#008080" />
+        </View>
+      ) : bookings.length === 0 ? (
         <View className="flex-1 justify-center items-center px-4">
           <Icon name="calendar-outline" size={80} color="#14b8a6" />
           <Text className="text-xl font-bold text-center mt-4 mb-2">
@@ -288,27 +231,13 @@ const MyBookingsScreen = () => {
         </View>
       ) : (
         <ScrollView showsVerticalScrollIndicator={false}>
-          {upcomingBookings.length > 0 && (
+          {bookings.length > 0 && (
             <View className="mt-4">
               <Text className="text-xl font-bold text-gray-800 mx-4 mb-4">
-                Upcoming Sessions
+               Sessions
               </Text>
               <FlatList
-                data={upcomingBookings}
-                keyExtractor={item => item.id}
-                renderItem={renderBookingCard}
-                scrollEnabled={false}
-              />
-            </View>
-          )}
-
-          {pastBookings.length > 0 && (
-            <View className="mt-4">
-              <Text className="text-xl font-bold text-gray-800 mx-4 mb-4">
-                Past Sessions
-              </Text>
-              <FlatList
-                data={pastBookings}
+                data={bookings}
                 keyExtractor={item => item.id}
                 renderItem={renderBookingCard}
                 scrollEnabled={false}
@@ -318,7 +247,6 @@ const MyBookingsScreen = () => {
         </ScrollView>
       )}
 
-      {/* Rating Modal */}
       <Modal visible={showRatingModal} transparent animationType="slide">
         <View className="flex-1 bg-black/50 justify-center items-center px-4">
           <View className="bg-white rounded-xl p-6 w-full max-w-sm">
@@ -329,7 +257,7 @@ const MyBookingsScreen = () => {
             {selectedBooking && (
               <View className="mb-6">
                 <Text className="text-center text-gray-700 mb-4">
-                  How was your session with {selectedBooking.tutor?.name}?
+                  How was your session with {(selectedBooking.tutor as any)?.name || 'this tutor'}?
                 </Text>
 
                 <View className="flex-row justify-center mb-4">

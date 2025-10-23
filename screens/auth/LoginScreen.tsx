@@ -11,9 +11,9 @@ import {
 import React, { useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import auth from '@react-native-firebase/auth';
-import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useResponsiveDesign, getScrollViewStyle } from '../../utils/responsive';
-import { createOrUpdateUser } from '../../utils/userService';
+import firestore from "@react-native-firebase/firestore";
 import { WEB_CLIENT_ID } from '@env';
 
 GoogleSignin.configure({
@@ -48,50 +48,11 @@ const LoginScreen = ({ navigation }: any) => {
     setIsLoading(true);
 
     try {
-      console.log('🔐 Attempting Firebase signInWithEmailAndPassword...');
       const userCredential = await auth().signInWithEmailAndPassword(email.trim(), password);
-      console.log('✅ User logged in successfully:', userCredential.user);
-      try {
-        await createOrUpdateUser(userCredential.user);
-      } catch (err) {
-        console.error('Failed to create/update user document after login:', err);
-      }
       Alert.alert('Success', `Welcome back, ${userCredential.user.email}!`);
-      // Navigation will happen automatically when auth state changes
     } catch (error: any) {
       console.error('Authentication error:', error);
-      let errorMessage = 'Authentication failed';
-      
-      switch (error.code) {
-        case 'auth/invalid-credential':
-          errorMessage = 'Invalid email or password. Please check your credentials and try again.';
-          break;
-        case 'auth/email-already-in-use':
-          errorMessage = 'This email is already registered. Try logging in instead.';
-          break;
-        case 'auth/invalid-email':
-          errorMessage = 'Invalid email address format';
-          break;
-        case 'auth/operation-not-allowed':
-          errorMessage = 'Operation not allowed';
-          break;
-        case 'auth/weak-password':
-          errorMessage = 'Password is too weak';
-          break;
-        case 'auth/user-disabled':
-          errorMessage = 'This account has been disabled';
-          break;
-        case 'auth/user-not-found':
-          errorMessage = 'No account found with this email';
-          break;
-        case 'auth/wrong-password':
-          errorMessage = 'Incorrect password';
-          break;
-        default:
-          errorMessage = error.message || 'Authentication failed';
-      }
-      
-      Alert.alert('Error', errorMessage);
+      Alert.alert('Error', error.message || 'Authentication failed');
     } finally {
       setIsLoading(false);
     }
@@ -100,84 +61,56 @@ const LoginScreen = ({ navigation }: any) => {
   const handleGoogleSignIn = async () => {
     try {
       setIsLoading(true);
-      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+
+      await GoogleSignin.hasPlayServices({
+        showPlayServicesUpdateDialog: true,
+      });
 
       await GoogleSignin.signOut();
-      
-  console.log('- Attempting Google Sign-In...');
+
       const signInResult = await GoogleSignin.signIn();
-      console.log('- Google Sign-In result:', signInResult);
-      
       const idToken = signInResult.data?.idToken;
-      console.log('- ID Token received:', !!idToken);
-      
+
       if (!idToken) {
         throw new Error('Failed to get ID token from Google Sign-In');
       }
-      
-      console.log('- Creating Firebase credential...');
-      const googleCredential = auth.GoogleAuthProvider.credential(idToken);
 
-      const userCredential = await auth().signInWithCredential(googleCredential);
-      // create/update user in Firestore
-      try {
-        await createOrUpdateUser(userCredential.user);
-      } catch (err) {
-        console.error('Failed to create/update user document after Google sign-in:', err);
+      const googleCredential = auth.GoogleAuthProvider.credential(idToken);
+      const userCredential = await auth().signInWithCredential(
+        googleCredential,
+      );
+
+      const user = userCredential.user;
+      const userRef = firestore().collection('users').doc(user.uid);
+      const docSnap = await userRef.get();
+
+      let isNewUser = false;
+      if (!docSnap.exists()) {
+        await userRef.set({
+          id: user.uid,
+          email: user.email,
+          name: user.displayName,
+          provider: 'google',
+          createdAt: firestore.FieldValue.serverTimestamp(),
+        });
+        isNewUser = true;
+      } else {
+        isNewUser = false;
       }
-      
-      console.log('✅ Google Sign-In successful:', userCredential.user.email);
-      Alert.alert('Success', `Signed in with Google as ${userCredential.user.email}!`);
-      
-      // Navigate to Home screen after successful login
-      // navigation.replace('Home');
-      
+
+      Alert.alert(
+        'Success',
+        isNewUser 
+          ? `Account created with Google!\n\nWelcome, ${userCredential.user.displayName}!`
+          : `Welcome back, ${userCredential.user.displayName}!`,
+        [
+          {
+            text: 'OK',
+          },
+        ],
+      );
     } catch (error: any) {
-      console.error('❌ Google Sign-In error:', error);
-      console.error('- Error code:', error.code);
-      console.error('- Error message:', error.message);
-      
-      let errorMessage = 'Google Sign-In failed';
-      
-      switch (error.code) {
-        case statusCodes.SIGN_IN_CANCELLED:
-          errorMessage = 'Sign-in was cancelled by user';
-          break;
-        case statusCodes.IN_PROGRESS:
-          errorMessage = 'Sign-in is already in progress';
-          break;
-        case statusCodes.PLAY_SERVICES_NOT_AVAILABLE:
-          errorMessage = 'Google Play Services not available or outdated';
-          break;
-        case statusCodes.SIGN_IN_REQUIRED:
-          errorMessage = 'Sign-in is required';
-          break;
-        case 'auth/account-exists-with-different-credential':
-          errorMessage = 'An account already exists with the same email address but different sign-in credentials';
-          break;
-        case 'auth/invalid-credential':
-          errorMessage = 'The credential is invalid or has expired';
-          break;
-        case 'auth/operation-not-allowed':
-          errorMessage = 'Google Sign-In is not enabled in Firebase Console';
-          break;
-        case 'auth/user-disabled':
-          errorMessage = 'The user account has been disabled';
-          break;
-        case 'auth/user-not-found':
-          errorMessage = 'No user found with this credential';
-          break;
-        case 'auth/invalid-verification-code':
-          errorMessage = 'Invalid verification code';
-          break;
-        case 'auth/invalid-verification-id':
-          errorMessage = 'Invalid verification ID';
-          break;
-        default:
-          errorMessage = error.message || 'Google Sign-In failed';
-      }
-      
-      Alert.alert('Google Sign-In Error', errorMessage);
+      Alert.alert('Google Sign-Up Error', error.message || 'Google Sign-Up failed');
     } finally {
       setIsLoading(false);
     }

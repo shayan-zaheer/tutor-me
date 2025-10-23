@@ -1,39 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   Text,
   View,
   TouchableOpacity,
-  ScrollView,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import auth from '@react-native-firebase/auth';
 import Icon from 'react-native-vector-icons/Ionicons';
 
 const TutorDashboardHome = ({ navigation }: any) => {
-  const [isLoading, setIsLoading] = useState(true);
-  const currentUser = auth().currentUser;
-
-  useEffect(() => {
-    loadTutorSetupStatus();
-  }, []);
-
-  const loadTutorSetupStatus = async () => {
-    try {
-      const userId = currentUser?.uid;
-      if (!userId) return;
-
-      // Load setup status from AsyncStorage (in real app, use Firestore)
-      const statusData = await AsyncStorage.getItem(`tutor-setup-${userId}`);
-      if (statusData) {
-        const status = JSON.parse(statusData);
-      }
-    } catch (error) {
-      console.error('Error loading tutor setup status:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const setupSteps = [
     {
       id: 'availability',
@@ -73,16 +46,8 @@ const TutorDashboardHome = ({ navigation }: any) => {
     navigation.navigate(step.screen);
   };
 
-  if (isLoading) {
-    return (
-      <View className="flex-1 bg-gray-50 items-center justify-center">
-        <Text className="text-gray-600">Loading your dashboard...</Text>
-      </View>
-    );
-  }
-
   return (
-    <ScrollView className="flex-1 bg-gray-50">
+    <View className="flex-1 bg-gray-50">
         <View className="mx-6 mt-6">
           <Text className="text-xl font-bold text-gray-800 mb-4">
             Complete Your Setup
@@ -129,34 +94,7 @@ const TutorDashboardHome = ({ navigation }: any) => {
         ))}
       </View>
 
-      <View className="mx-6 mb-8">
-        <Text className="text-xl font-bold text-gray-800 mb-4">
-          Your Statistics
-        </Text>
-        
-        <View className="flex-row flex-wrap">
-          <View className="bg-white rounded-xl p-4 shadow-sm flex-1 mr-2 mb-3">
-            <View className="bg-blue-100 w-12 h-12 rounded-full items-center justify-center mb-3">
-              <Icon name="people" size={24} color="#3b82f6" />
-            </View>
-            <Text className="text-2xl font-bold text-gray-800">
-              
-            </Text>
-            <Text className="text-gray-600">Students</Text>
-          </View>
-
-          <View className="bg-white rounded-xl p-4 shadow-sm flex-1 ml-2 mb-3">
-            <View className="bg-green-100 w-12 h-12 rounded-full items-center justify-center mb-3">
-              <Icon name="star" size={24} color="#10b981" />
-            </View>
-            <Text className="text-2xl font-bold text-gray-800">
-
-            </Text>
-            <Text className="text-gray-600">Rating</Text>
-          </View>
-        </View>
-      </View>
-    </ScrollView>
+    </View>
   );
 };
 
