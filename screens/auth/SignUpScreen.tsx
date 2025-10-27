@@ -7,18 +7,13 @@ import {
   ActivityIndicator,
   ScrollView,
   Image,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useState } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import auth from '@react-native-firebase/auth';
-import {
-  GoogleSignin,
-} from '@react-native-google-signin/google-signin';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import firestore from '@react-native-firebase/firestore';
-import {
-  useResponsiveDesign,
-  getScrollViewStyle,
-} from '../../utils/responsive';
 import { WEB_CLIENT_ID } from '@env';
 GoogleSignin.configure({
   webClientId: WEB_CLIENT_ID,
@@ -32,9 +27,8 @@ const SignUpScreen = ({ navigation }: any) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-
-  const responsive = useResponsiveDesign();
+  const [isLocalLoading, setIsLocalLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const handleSignUp = async () => {
     if (!fullName.trim()) {
@@ -63,7 +57,7 @@ const SignUpScreen = ({ navigation }: any) => {
       return;
     }
 
-    setIsLoading(true);
+    setIsLocalLoading(true);
 
     try {
       const userCredential = await auth().createUserWithEmailAndPassword(
@@ -84,26 +78,16 @@ const SignUpScreen = ({ navigation }: any) => {
           createdAt: firestore.FieldValue.serverTimestamp(),
         });
       }
-
-      Alert.alert(
-        'Success',
-        `Account created successfully for ${userCredential.user.email}!\n\nWelcome, ${fullName}!`,
-        [
-          {
-            text: 'OK',
-          },
-        ],
-      );
     } catch (error: any) {
       Alert.alert('SignUp Error', error.message || 'Account creation failed');
     } finally {
-      setIsLoading(false);
+      setIsLocalLoading(false);
     }
   };
 
   const handleGoogleSignUp = async () => {
     try {
-      setIsLoading(true);
+      setIsGoogleLoading(true);
 
       await GoogleSignin.hasPlayServices({
         showPlayServicesUpdateDialog: true,
@@ -127,7 +111,6 @@ const SignUpScreen = ({ navigation }: any) => {
       const userRef = firestore().collection('users').doc(user.uid);
       const docSnap = await userRef.get();
 
-      let isNewUser = false;
       if (!docSnap.exists()) {
         await userRef.set({
           id: user.uid,
@@ -136,66 +119,45 @@ const SignUpScreen = ({ navigation }: any) => {
           provider: 'google',
           createdAt: firestore.FieldValue.serverTimestamp(),
         });
-        isNewUser = true;
-      } else {
-        isNewUser = false;
       }
-
-      Alert.alert(
-        'Success',
-        isNewUser 
-          ? `Account created with Google!\n\nWelcome, ${userCredential.user.displayName}!`
-          : `Welcome back, ${userCredential.user.displayName}!`,
-        [
-          {
-            text: 'OK',
-          },
-        ],
-      );
     } catch (error: any) {
-      Alert.alert('Google Sign-Up Error', error.message || 'Google Sign-Up failed');
+      Alert.alert(
+        'Google Sign-Up Error',
+        error.message || 'Google Sign-Up failed',
+      );
     } finally {
-      setIsLoading(false);
+      setIsGoogleLoading(false);
     }
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-blue-50">
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+      className="flex-1 bg-blue-50"
+    >
       <ScrollView
-        className="flex-1"
-        contentContainerStyle={getScrollViewStyle(
-          responsive.isLandscape,
-          responsive.containerPadding,
-        )}
         keyboardShouldPersistTaps="handled"
+        horizontal={false}
+        className="py-8 px-6 flex-1"
+        showsVerticalScrollIndicator={false}
       >
-        <View
-          className="items-center"
-          style={{ marginBottom: responsive.headerMargin }}
-        >
-          <Text
-            className={`font-bold text-[#008080] mb-2 text-center ${responsive.fontSize['3xl']}`}
-          >
+        <View className="items-center mb-8">
+          <Text className="font-bold text-[#008080] mb-2 text-center text-3xl">
             Join TutorMe
           </Text>
-          <Text
-            className={`text-gray-600 text-center font-bold ${responsive.fontSize.xl}`}
-            numberOfLines={1}
-            adjustsFontSizeToFit={true}
-          >
+          <Text className="text-gray-600 text-center font-bold text-xl">
             Create your account today
           </Text>
         </View>
 
-        <View style={{ marginBottom: responsive.formMargin }}>
+        <View className="mb-6">
           <View className="mb-4">
-            <Text
-              className={`font-medium text-black mb-2 ${responsive.fontSize.xs}`}
-            >
+            <Text className="font-medium text-black mb-2 text-sm">
               Full Name
             </Text>
             <TextInput
-              className={`bg-white border border-gray-300 text-black rounded-lg ${responsive.spacing.input}`}
+              className="bg-white border border-gray-300 text-black rounded-lg px-4 py-3"
               placeholder="Enter your full name"
               placeholderTextColor="#666"
               value={fullName}
@@ -206,13 +168,11 @@ const SignUpScreen = ({ navigation }: any) => {
           </View>
 
           <View className="mb-4">
-            <Text
-              className={`font-medium text-black mb-2 ${responsive.fontSize.xs}`}
-            >
+            <Text className="font-medium text-black mb-2 text-sm">
               Email Address
             </Text>
             <TextInput
-              className={`bg-white border border-gray-300 text-black rounded-lg ${responsive.spacing.input}`}
+              className="bg-white border border-gray-300 text-black rounded-lg px-4 py-3"
               placeholder="Enter your email"
               placeholderTextColor="#666"
               value={email}
@@ -224,13 +184,11 @@ const SignUpScreen = ({ navigation }: any) => {
           </View>
 
           <View className="mb-4">
-            <Text
-              className={`font-medium text-black mb-2 ${responsive.fontSize.xs}`}
-            >
+            <Text className="font-medium text-black mb-2 text-sm">
               Password
             </Text>
             <TextInput
-              className={`bg-white border border-gray-300 rounded-lg text-black ${responsive.spacing.input}`}
+              className="bg-white border border-gray-300 rounded-lg text-black px-4 py-3"
               placeholder="Create a password (min 6 characters)"
               placeholderTextColor="#666"
               value={password}
@@ -240,14 +198,12 @@ const SignUpScreen = ({ navigation }: any) => {
             />
           </View>
 
-          <View style={{ marginBottom: responsive.formMargin }}>
-            <Text
-              className={`font-medium text-black mb-2 ${responsive.fontSize.xs}`}
-            >
+          <View className="mb-6">
+            <Text className="font-medium text-black mb-2 text-sm">
               Confirm Password
             </Text>
             <TextInput
-              className={`bg-white border border-gray-300 rounded-lg text-black ${responsive.spacing.input}`}
+              className="bg-white border border-gray-300 rounded-lg text-black px-4 py-3"
               placeholder="Confirm your password"
               placeholderTextColor="#666"
               value={confirmPassword}
@@ -259,12 +215,12 @@ const SignUpScreen = ({ navigation }: any) => {
 
           <TouchableOpacity
             className={`rounded-lg py-4 mb-4 ${
-              isLoading ? 'bg-gray-400' : 'bg-[#008080]'
+              isLocalLoading ? 'bg-gray-400' : 'bg-[#008080]'
             }`}
             onPress={handleSignUp}
-            disabled={isLoading}
+            disabled={isLocalLoading}
           >
-            {isLoading ? (
+            {isLocalLoading ? (
               <ActivityIndicator color="white" />
             ) : (
               <Text className="text-white font-semibold text-lg text-center">
@@ -274,26 +230,32 @@ const SignUpScreen = ({ navigation }: any) => {
           </TouchableOpacity>
 
           <View className="flex-row items-center my-4">
-            <View style={{ flex: 1, height: 1, backgroundColor: '#ccc' }} />
+            <View className="flex-1 h-px bg-gray-300" />
             <Text className="mx-4 text-gray-500 font-medium bg-blue-50 px-2">
               OR
             </Text>
-            <View style={{ flex: 1, height: 1, backgroundColor: '#ccc' }} />
+            <View className="flex-1 h-px bg-gray-300" />
           </View>
 
           <TouchableOpacity
             className="bg-white border border-gray-300 rounded-lg py-4 mb-4 flex-row justify-center items-center"
             onPress={handleGoogleSignUp}
-            disabled={isLoading}
+            disabled={isGoogleLoading}
           >
-            <Image
-              source={require('../../assets/google-logo.png')}
-              style={{ width: 24, height: 24, marginRight: 10 }}
-              resizeMode="contain"
-            />
-            <Text className="text-gray-700 font-medium text-base">
-              Sign Up with Google
-            </Text>
+            {isGoogleLoading ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <>
+                <Image
+                  source={require('../../assets/google-logo.png')}
+                  className="w-6 h-6 mr-3"
+                  resizeMode="contain"
+                />
+                <Text className="text-gray-700 font-medium text-base">
+                  Sign In with Google
+                </Text>
+              </>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -305,7 +267,7 @@ const SignUpScreen = ({ navigation }: any) => {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 };
 

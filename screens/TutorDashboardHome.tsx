@@ -37,7 +37,7 @@ const TutorDashboardHome = ({ navigation }: any) => {
       title: "Manage Bookings",
       description: "View and manage your tutoring sessions",
       icon: "book-outline",
-      screen: "TutorBookingsScreen",
+      screen: "ManageBookingsScreen",
       color: "bg-yellow-500",
     }
   ];
@@ -50,10 +50,10 @@ const TutorDashboardHome = ({ navigation }: any) => {
     <View className="flex-1 bg-gray-50">
         <View className="mx-6 mt-6">
           <Text className="text-xl font-bold text-gray-800 mb-4">
-            Complete Your Setup
+            Manage Your Setup
           </Text>
           <Text className="text-gray-600 mb-4">
-            Complete these one-time setup steps to start tutoring:
+            Manage your tutoring profile and schedule here:
           </Text>
         </View>
 

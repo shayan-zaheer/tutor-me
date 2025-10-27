@@ -26,12 +26,6 @@ const HomeScreen = ({ navigation }: any) => {
       color: 'bg-green-500',
     },
     {
-      title: 'Sessions Today',
-      value: 0,
-      icon: 'calendar',
-      color: 'bg-purple-500',
-    },
-    {
       title: 'Average Rating',
       value: 0,
       icon: 'star',
@@ -93,7 +87,7 @@ const HomeScreen = ({ navigation }: any) => {
               const rating = d.data()?.profile?.rating || 0;
               return sum + rating;
             }, 0);
-            updated[3].value =
+            updated[2].value =
               snapshot.size > 0
                 ? parseFloat((totalRating / snapshot.size).toFixed(1))
                 : 0;

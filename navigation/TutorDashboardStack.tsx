@@ -4,6 +4,7 @@ import TutorDashboardHome from '../screens/TutorDashboardHome.tsx';
 import AvailabilityScreen from '../screens/tutor-onboarding/AvailabilityScreen.tsx';
 import ReviewProfileScreen from '../screens/tutor-onboarding/ReviewProfileScreen.tsx';
 import ContactInfoScreen from '../screens/tutor-onboarding/ContactInfoScreen.tsx';
+import ManageBookingsScreen from '../screens/tutor-onboarding/ManageBookingsScreen.tsx';
 
 const Stack = createNativeStackNavigator();
 
@@ -35,6 +36,11 @@ export default function TutorDashboardStack() {
         name="ContactInfoScreen" 
         component={ContactInfoScreen}
         options={{ title: 'Contact Information' }}
+      />
+      <Stack.Screen 
+        name="ManageBookingsScreen" 
+        component={ManageBookingsScreen}
+        options={{ title: 'Manage Bookings' }}
       />
     </Stack.Navigator>
   );

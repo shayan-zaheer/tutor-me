@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,8 @@ import {
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { Schedule, Tutor } from '../types';
+import { populateReferences } from '../utils/populateReferences';
+import { Tutor } from '../types';
 
 const TutorListScreen = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -21,91 +22,108 @@ const TutorListScreen = () => {
   const [selectedTutor, setSelectedTutor] = useState<Tutor | null>(null);
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<any | null>(null);
+  const [allTutors, setAllTutors] = useState<Tutor[]>([]);
+  const [filteredTutors, setFilteredTutors] = useState<Tutor[]>([]);
   const currentUser = auth().currentUser;
+
+  const debouncedSearch = useCallback(
+    debounce((query: string, tutors: any[]) => {
+      if (!query.trim()) {
+        setFilteredTutors(tutors);
+        return;
+      }
+
+      const filtered = tutors.filter(tutor => {
+        const tutorData = (tutor as any).tutorId;
+        const nameMatch = tutorData?.name
+          ?.toLowerCase()
+          .includes(query.toLowerCase());
+        const specialityMatch = tutorData?.profile?.speciality
+          ?.toLowerCase()
+          .includes(query.toLowerCase());
+        return nameMatch || specialityMatch;
+      });
+      setFilteredTutors(filtered);
+    }, 500),
+    []
+  );
+
+  function debounce(func: (...args: any[]) => void, delay: number) {
+    let timeout: any;
+    return (...args: any[]) => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        func(...args);
+      }, delay);
+    };
+  }
 
   useEffect(() => {
     setIsLoading(true);
     const selfRef = firestore().collection('users').doc(currentUser?.uid);
+
     const unsubscribe = firestore()
       .collection('schedules')
       .where('tutorId', '!=', selfRef)
-      .onSnapshot(async snapshot => {
+      .onSnapshot(async schedulesSnapshot => {
         try {
-          const schedulesData: Schedule[] = snapshot.docs.map(doc => ({
-            id: doc.id,
-            tutorId: doc.data().tutorId,
-            slots: doc.data().slots ?? [],
-          }));
+          const schedulesWithPopulatedData = await Promise.all(
+            schedulesSnapshot.docs.map(async (doc: any) => {
+              const data = doc.data();
+              const populatedData = await populateReferences(data);
+              return { id: doc.id, ...populatedData };
+            }),
+          );
 
-          const tutorIds = [
-            ...new Set(
-              schedulesData
-                .map(s =>
-                  typeof s.tutorId === 'string' ? s.tutorId : s.tutorId?.id,
-                )
-                .filter(Boolean) as string[],
-            ),
-          ];
-
-          if (tutorIds.length === 0) {
-            setTutors([]);
-            return;
-          }
-
-          const bookingsSnapshot = await firestore().collection('bookings').get();
+          const bookingsSnapshot = await firestore()
+            .collection('bookings')
+            .get();
           const bookedSlots = new Set();
-          
-          bookingsSnapshot.docs.forEach(doc => {
+
+          bookingsSnapshot.docs.forEach((doc: any) => {
             const booking = doc.data();
             if (booking.schedule && booking.bookedSlot) {
-              const slotKey = `${booking.schedule.id}-${booking.bookedSlot.startTime.toMillis()}-${booking.bookedSlot.endTime.toMillis()}`;//unique across days
+              const slotKey = `${
+                booking.schedule.id
+              }-${booking.bookedSlot.startTime.toMillis()}-${booking.bookedSlot.endTime.toMillis()}`;
               bookedSlots.add(slotKey);
             }
           });
 
-          let tutorsData: Tutor[] = [];
-          const batchSize = 10;
-          for (let i = 0; i < tutorIds.length; i += batchSize) {
-            const chunk = tutorIds.slice(i, i + batchSize);
-            const tutorsSnapshot = await firestore()
-              .collection('users')
-              .where(firestore.FieldPath.documentId(), 'in', chunk)
-              .get();
+          const tutorsWithBookingStatus = schedulesWithPopulatedData.map(
+            schedule => {
+              const slotsWithStatus = schedule.slots.map(
+                (slot: any, index: number) => {
+                  const slotKey = `${
+                    schedule.id
+                  }-${slot.startTime.toMillis()}-${slot.endTime.toMillis()}`;
+                  return {
+                    ...slot,
+                    id: `${schedule.id}-${index}`,
+                    scheduleId: schedule.id,
+                    day: `${slot.startTime
+                      .toDate()
+                      .toLocaleDateString('en-GB', { weekday: 'long' })
+                      .substring(0, 3)} ${slot.startTime
+                      .toDate()
+                      .toLocaleDateString('en-GB')}`,
+                    isBooked: bookedSlots.has(slotKey),
+                  };
+                },
+              );
 
-            tutorsData.push(
-              ...tutorsSnapshot.docs
-                .map(doc => ({ id: doc.id, ...doc.data() } as Tutor))
-                .filter(t => t.profile),
-            );
-          }
+              return {
+                ...schedule,
+                slots: slotsWithStatus,
+              };
+            },
+          );
 
-          const tutorsWithSlots = tutorsData.map(tutor => {
-            const tutorSchedules = schedulesData.filter(s => {
-              const tutorId =
-                typeof s.tutorId === 'string' ? s.tutorId : s.tutorId?.id;
-              return tutorId === tutor.id;
-            });
-            const weeklySlots = tutorSchedules.flatMap(s =>
-              s.slots.map((slot, index) => {
-                const slotKey = `${s.id}-${slot.startTime.toMillis()}-${slot.endTime.toMillis()}`;
-                return {
-                  ...slot,
-                  id: `${s.id}-${index}`,
-                  scheduleId: s.id,
-                  day: slot.startTime
-                    .toDate()
-                    .toLocaleDateString('en-GB', { weekday: 'long' }),
-                  isBooked: bookedSlots.has(slotKey),
-                };
-              }),
-            );
-            return { ...tutor, weeklySlots };
-          });
-
-          setTutors(tutorsWithSlots);
+          setAllTutors(tutorsWithBookingStatus);
+          setFilteredTutors(tutorsWithBookingStatus);
+          setIsLoading(false);
         } catch (err) {
-          console.error('Error loading tutors:', err);
-        } finally {
+          console.error('Error processing tutors:', err);
           setIsLoading(false);
         }
       });
@@ -113,7 +131,9 @@ const TutorListScreen = () => {
     return () => unsubscribe();
   }, [currentUser?.uid]);
 
-  const [tutors, setTutors] = useState<Tutor[]>([]);
+  useEffect(() => {
+    debouncedSearch(searchQuery, allTutors);
+  }, [searchQuery, allTutors, debouncedSearch]);
 
   const handleBookSlot = (tutor: Tutor, slot: any) => {
     if (slot.isBooked) {
@@ -129,25 +149,14 @@ const TutorListScreen = () => {
     setShowBookingModal(true);
   };
 
-  const filterSearch = () => {
-    const data = [...tutors];
-    const filtered = data.filter(tutor => {
-      const nameMatch = tutor.name
-        ?.toLowerCase()
-        .includes(searchQuery.toLowerCase());
-      const specialityMatch = tutor.profile?.speciality
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase());
-      return nameMatch || specialityMatch;
-    })
-    setTutors(filtered);
-  }
+
 
   const confirmBooking = async () => {
     if (!selectedTutor || !selectedSlot || !currentUser) return;
 
     try {
-      const tutorRef = firestore().collection('users').doc(selectedTutor.id);
+      const tutorId = (selectedTutor as any).tutorId?.id || selectedTutor.id;
+      const tutorRef = firestore().collection('users').doc(tutorId);
       const selfRef = firestore().collection('users').doc(currentUser.uid);
 
       const studentBookingsSnapshot = await firestore()
@@ -180,18 +189,41 @@ const TutorListScreen = () => {
         return;
       }
 
-      const schedulesSnapshot = await firestore()
+      const studentSchedulesSnapshot = await firestore()
         .collection('schedules')
-        .where('tutorId', '==', tutorRef)
+        .where('tutor', '==', selfRef)
         .get();
 
-      if (schedulesSnapshot.empty) {
-        Alert.alert('Error', 'Schedule not found');
+      const hasTeachingConflict = studentSchedulesSnapshot.docs.some(doc => {
+        const schedule = doc.data();
+        if (schedule.slots) {
+          return schedule.slots.some((slot: any) => {
+            const existingStart = slot.startTime.toDate();
+            const existingEnd = slot.endTime.toDate();
+            const newStart = selectedSlot.startTime.toDate();
+            const newEnd = selectedSlot.endTime.toDate();
+
+            return (
+              (newStart >= existingStart && newStart < existingEnd) ||
+              (newEnd > existingStart && newEnd <= existingEnd) ||
+              (newStart <= existingStart && newEnd >= existingEnd)
+            );
+          });
+        }
+        return false;
+      });
+
+      if (hasTeachingConflict) {
+        Alert.alert(
+          'Teaching Conflict',
+          'You have to teach during this time slot. Please choose a different time slot.',
+        );
         return;
       }
 
-      const scheduleDoc = schedulesSnapshot.docs[0];
-      const scheduleRef = firestore().collection('schedules').doc(scheduleDoc.id);
+      const scheduleRef = firestore()
+        .collection('schedules')
+        .doc(selectedSlot.scheduleId);
 
       await firestore()
         .collection('bookings')
@@ -214,7 +246,9 @@ const TutorListScreen = () => {
 
       Alert.alert(
         'Booking Confirmed!',
-        `Your session with ${selectedTutor.name} on ${selectedSlot.day} has been booked.`,
+        `Your session with ${
+          (selectedTutor as any).tutorId?.name || 'the tutor'
+        } on ${selectedSlot.day} has been booked.`,
         [{ text: 'OK' }],
       );
 
@@ -262,20 +296,20 @@ const TutorListScreen = () => {
         <View className="flex-row items-center mb-3">
           <View className="flex-1">
             <Text className="text-xl font-bold text-gray-800">
-              {tutor.name}
+              {tutor.tutorId.name}
             </Text>
             <View className="flex-row items-center mt-1">
               <View className="flex-row items-center mr-3">
-                {renderStars(tutor.profile.rating)}
+                {renderStars(tutor.tutorId.profile.rating)}
                 <Text className="ml-2 text-gray-600">
-                  {tutor.profile.rating}
+                  {tutor.tutorId.profile.rating}
                 </Text>
               </View>
             </View>
           </View>
         </View>
 
-        <Text className="text-gray-700 mb-3">{tutor.profile.bio}</Text>
+        <Text className="text-gray-700 mb-3">{tutor.tutorId.profile.bio}</Text>
 
         <View className="border-t border-gray-200 pt-4">
           <Text className="text-lg font-semibold text-gray-800 mb-3">
@@ -283,7 +317,7 @@ const TutorListScreen = () => {
           </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View className="flex-row">
-              {tutor.weeklySlots.map((slot: any) => (
+              {tutor.slots.map((slot: any) => (
                 <TouchableOpacity
                   key={slot.id}
                   className={`mr-3 p-3 rounded-lg min-w-[120px] ${
@@ -333,12 +367,9 @@ const TutorListScreen = () => {
           <Icon name="search" size={20} color="#666" />
           <TextInput
             placeholder="Search tutors or subjects..."
-            placeholderTextColor={"#666"}
+            placeholderTextColor={'#666'}
             value={searchQuery}
-            onChangeText={(text) => {
-              setSearchQuery(text);
-              filterSearch();
-            }}
+            onChangeText={setSearchQuery}
             className="flex-1 ml-2 text-gray-800"
           />
         </View>
@@ -350,7 +381,7 @@ const TutorListScreen = () => {
         </View>
       ) : (
         <FlatList
-          data={tutors}
+          data={filteredTutors}
           keyExtractor={item => item.id}
           renderItem={renderTutorCard}
           className="py-4"
@@ -368,7 +399,8 @@ const TutorListScreen = () => {
             {selectedTutor && selectedSlot && (
               <View>
                 <Text className="text-gray-700 text-center mb-2">
-                  Book a session with {selectedTutor.name}?
+                  Book a session with{' '}
+                  {(selectedTutor as any).tutorId?.name || 'the tutor'}?
                 </Text>
                 <Text className="font-semibold text-center mb-4">
                   {selectedSlot.day} at

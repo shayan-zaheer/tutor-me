@@ -14,6 +14,7 @@ import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { Booking } from '../types';
+import { populateReferences } from '../utils/populateReferences';
 
 const MyBookingsScreen = () => {
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -34,58 +35,19 @@ const MyBookingsScreen = () => {
       .collection('bookings')
       .where('student', '==', selfRef)
       .onSnapshot(async snapshot => {
-        const bookingsData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Booking[];
-        console.log("Fetched Bookings:", bookingsData);
-
-        if (bookingsData.length === 0) {
-          setBookings([]);
-          return;
-        }
-
-        const tutorRefs = [...new Set(
-          bookingsData
-            .map((booking: any) => booking.tutor)
-            .filter(Boolean)
-        )];
-
-        if (tutorRefs.length === 0) {
-          setBookings(bookingsData);
-          return;
-        }
-
-        const tutorIds = tutorRefs.map((ref: any) => 
-          typeof ref === 'string' ? ref : ref.id
-        );
-
-        let tutorsData: any[] = [];
-        const batchSize = 10;
-        for (let i = 0; i < tutorIds.length; i += batchSize) {
-          const chunk = tutorIds.slice(i, i + batchSize);
-          const tutorsSnapshot = await firestore()
-            .collection('users')
-            .where(firestore.FieldPath.documentId(), 'in', chunk)
-            .get();
-          
-          tutorsData.push(
-            ...tutorsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+        try {
+          const populatedBookings = await Promise.all(
+            snapshot.docs.map(async doc => {
+              const populated = await populateReferences(doc.data());
+              return { id: doc.id, ...populated }
+            })
           );
+          setBookings(populatedBookings);
+          setIsLoading(false);
+        } catch(err){
+          console.error('Error populating booking references:', err);
+          setIsLoading(false);
         }
-
-        const populatedBookings = bookingsData.map((booking: any) => ({
-          ...booking,
-          tutor: tutorsData.find(tutor => {
-            const tutorRefId = typeof booking.tutor === 'string' 
-              ? booking.tutor 
-              : booking.tutor?.id;
-            return tutor.id === tutorRefId;
-          })
-        })) as Booking[];
-
-        setBookings(populatedBookings);
-        setIsLoading(false);
       });
 
     return () => unsubscribe();
@@ -176,7 +138,7 @@ const MyBookingsScreen = () => {
                   Your Rating:
                 </Text>
                 <View className="flex-row items-center mb-2">
-                  {renderStars(booking.rating)}
+                  {renderStars(booking.ratings)}
                 </View>
                 {booking.review && (
                   <Text className="text-gray-600 italic">
@@ -198,20 +160,6 @@ const MyBookingsScreen = () => {
       </View>
     </View>
   );
-
-  if (!currentUser) {
-    return (
-      <View className="flex-1 justify-center items-center bg-gray-50 px-4">
-        <Icon name="book-outline" size={80} color="#14b8a6" />
-        <Text className="text-xl font-bold text-center mt-4 mb-2">
-          Sign In Required
-        </Text>
-        <Text className="text-gray-600 text-center">
-          Please sign in to view your bookings
-        </Text>
-      </View>
-    );
-  }
 
   return (
     <View className="flex-1 bg-gray-50">
@@ -267,7 +215,7 @@ const MyBookingsScreen = () => {
                 <TextInput
                   className="border border-gray-300 rounded-lg p-3 text-gray-800"
                   placeholder="Write a review (optional)..."
-                  placeholderTextColor={'#000'}
+                  placeholderTextColor={'#666'}
                   value={review}
                   onChangeText={setReview}
                   multiline

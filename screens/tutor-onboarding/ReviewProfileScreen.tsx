@@ -3,9 +3,20 @@ import { Modal, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { Picker } from '@react-native-picker/picker';
+import SelectDropdown from 'react-native-select-dropdown';
 
 const ReviewProfileScreen = () => {
+  const subjects = [
+    { title: 'Mathematics', icon: 'calculator-outline' },
+    { title: 'Physics', icon: 'atom-outline' },
+    { title: 'Chemistry', icon: 'flask-outline' },
+    { title: 'Biology', icon: 'leaf-outline' },
+    { title: 'English', icon: 'book-outline' },
+    { title: 'History', icon: 'time-outline' },
+    { title: 'Geography', icon: 'globe-outline' },
+    { title: 'Computer Science', icon: 'laptop-outline' },
+  ]
+
   const currentUser = auth().currentUser;
   useEffect(() => {
     if (!currentUser?.uid) return;
@@ -15,7 +26,9 @@ const ReviewProfileScreen = () => {
       .doc(currentUser.uid)
       .onSnapshot(doc => {
         if (doc.exists()) {
-          setUser(doc.data());
+          const profile = doc.data();
+          setUser(profile);
+          setSelectedSpeciality(profile?.profile?.speciality || 'Select your speciality');
         }
       });
 
@@ -129,33 +142,48 @@ const ReviewProfileScreen = () => {
             </Text>
             <Text className="font-semibold text-md ml-1">Speciality</Text>
             <View
-              style={{
-                borderColor: '#666',
-                borderWidth: 1,
-                borderRadius: 20,
-              }}
+            className="border border-gray-300 rounded-xl"
             >
-              <Picker
-                selectedValue={selectedSpeciality}
-                onValueChange={itemValue => setSelectedSpeciality(itemValue)}
-                style={{
-                  color: '#666',
-                  paddingHorizontal: 10,
-                  marginLeft: 7,
+              <SelectDropdown
+                data={subjects}
+                onSelect={(selectedItem) => {
+                    setSelectedSpeciality(selectedItem.title);
                 }}
-              >
-                <Picker.Item label="Mathematics" value="Mathematics" />
-                <Picker.Item label="Science" value="Science" />
-                <Picker.Item label="Literature" value="Literature" />
-                <Picker.Item label="Chemistry" value="Chemistry" />
-                <Picker.Item label="Physics" value="Physics" />
-                <Picker.Item label="Biology" value="Biology" />
-                <Picker.Item label="Programming" value="Programming" />
-                <Picker.Item
-                  label="Computer Science"
-                  value="Computer Science"
-                />
-              </Picker>
+                defaultValue={selectedSpeciality}
+                renderButton={(selectedItem, isOpened) => {
+                  return (
+                    <View className='px-4 py-4 flex-row gap-x-2 items-center'>
+                      {selectedItem && (
+                        <Icon
+                          name={selectedItem.icon}
+                        />
+                      )}
+                      <Text>
+                        {(selectedSpeciality) ||
+                          'Select your speciality'}
+                      </Text>
+                      <Icon
+                        name={isOpened ? 'chevron-up' : 'chevron-down'}
+                      />
+                    </View>
+                  );
+                }}
+                renderItem={(item, index, isSelected) => {
+                  return (
+                    <View
+                      className={`px-4 py-3 flex-row items-center gap-x-2 ${isSelected && "bg-[#D2D9DF]"}`}
+                    >
+                      <Icon
+                        name={item.icon}
+                      />
+                      <Text>
+                        {item.title}
+                      </Text>
+                    </View>
+                  );
+                }}
+                showsVerticalScrollIndicator={false}
+              />
             </View>
             <View className="flex-row justify-between mt-4">
               <TouchableOpacity

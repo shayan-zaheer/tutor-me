@@ -1,20 +1,21 @@
 import {
   Text,
   View,
-  TextInput,
   TouchableOpacity,
   Alert,
   ActivityIndicator,
   ScrollView,
   Image,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import React, { useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import auth from '@react-native-firebase/auth';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
-import { useResponsiveDesign, getScrollViewStyle } from '../../utils/responsive';
 import firestore from "@react-native-firebase/firestore";
 import { WEB_CLIENT_ID } from '@env';
+import AuthInput from '../../components/AuthInput';
 
 GoogleSignin.configure({
   webClientId: WEB_CLIENT_ID,
@@ -26,9 +27,8 @@ GoogleSignin.configure({
 const LoginScreen = ({ navigation }: any) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-
-  const responsive = useResponsiveDesign();
+  const [isLocalLoading, setIsLocalLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const handleAuth = async () => {
     if (!email || !password) {
@@ -45,22 +45,21 @@ const LoginScreen = ({ navigation }: any) => {
       return;
     }
 
-    setIsLoading(true);
+    setIsLocalLoading(true);
 
     try {
-      const userCredential = await auth().signInWithEmailAndPassword(email.trim(), password);
-      Alert.alert('Success', `Welcome back, ${userCredential.user.email}!`);
+      await auth().signInWithEmailAndPassword(email.trim(), password);
     } catch (error: any) {
       console.error('Authentication error:', error);
       Alert.alert('Error', error.message || 'Authentication failed');
     } finally {
-      setIsLoading(false);
+      setIsLocalLoading(false);
     }
   };
 
   const handleGoogleSignIn = async () => {
     try {
-      setIsLoading(true);
+      setIsGoogleLoading(true);
 
       await GoogleSignin.hasPlayServices({
         showPlayServicesUpdateDialog: true,
@@ -84,7 +83,6 @@ const LoginScreen = ({ navigation }: any) => {
       const userRef = firestore().collection('users').doc(user.uid);
       const docSnap = await userRef.get();
 
-      let isNewUser = false;
       if (!docSnap.exists()) {
         await userRef.set({
           id: user.uid,
@@ -93,97 +91,67 @@ const LoginScreen = ({ navigation }: any) => {
           provider: 'google',
           createdAt: firestore.FieldValue.serverTimestamp(),
         });
-        isNewUser = true;
-      } else {
-        isNewUser = false;
       }
-
-      Alert.alert(
-        'Success',
-        isNewUser 
-          ? `Account created with Google!\n\nWelcome, ${userCredential.user.displayName}!`
-          : `Welcome back, ${userCredential.user.displayName}!`,
-        [
-          {
-            text: 'OK',
-          },
-        ],
-      );
     } catch (error: any) {
       Alert.alert('Google Sign-Up Error', error.message || 'Google Sign-Up failed');
     } finally {
-      setIsLoading(false);
+      setIsGoogleLoading(false);
     }
   };
 
   return (
     <SafeAreaView className="flex-1 bg-blue-50">
-      <ScrollView
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
         className="flex-1"
-        contentContainerStyle={getScrollViewStyle(responsive.isLandscape, responsive.containerPadding)}
-        keyboardShouldPersistTaps="handled"
       >
-        <View className="items-center" style={{ marginBottom: responsive.headerMargin }}>
-          <Text
-            className={`font-bold text-[#008080] mb-2 text-center ${responsive.fontSize['3xl']}`}
-          >
+        <ScrollView
+          className="flex-1 p-6"
+          keyboardShouldPersistTaps="handled"
+        >
+        <View className="items-center mb-8">
+          <Text className="font-bold text-[#008080] mb-2 text-center text-3xl">
             TutorMe
           </Text>
-          <Text
-            className={`text-gray-600 text-center font-bold ${responsive.fontSize.xl}`}
-            numberOfLines={1}
-            adjustsFontSizeToFit={true}
-          >
+          <Text className="text-gray-600 text-center font-bold text-xl line-clamp-1">
             Welcome Back
           </Text>
         </View>
 
-        <View style={{ marginBottom: responsive.formMargin }}>
+        <View className="mb-6">
           <View className="mb-4">
-            <Text
-              className={`font-medium text-black mb-2 ${responsive.fontSize.xs}`}
-            >
+            <Text className="font-medium text-black mb-2 text-sm">
               Email Address
             </Text>
-            <TextInput
-              className={`bg-white border border-gray-300 text-black rounded-lg ${responsive.spacing.input}`}
+            <AuthInput 
               placeholder="Enter your email"
-              placeholderTextColor="#000"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
             />
           </View>
 
-          <View style={{ marginBottom: responsive.formMargin }}>
-            <Text
-              className={`font-medium text-black mb-2 ${responsive.fontSize.xs}`}
-            >
+          <View className="mb-6">
+            <Text className="font-medium text-black mb-2 text-sm">
               Password
             </Text>
-            <View className="relative">
-              <TextInput
-                className={`bg-white border border-gray-300 rounded-lg text-black ${responsive.spacing.input}`}
+              <AuthInput 
                 placeholder="Enter your password"
-                placeholderTextColor="#000"
                 value={password}
                 onChangeText={setPassword}
-                secureTextEntry
-                autoCapitalize="none"
+                secureTextEntry={true}
               />
-            </View>
           </View>
 
           <TouchableOpacity
             className={`rounded-lg py-4 mb-4 ${
-              isLoading ? 'bg-gray-400' : 'bg-[#008080]'
+              isLocalLoading ? 'bg-gray-400' : 'bg-[#008080]'
             }`}
             onPress={handleAuth}
-            disabled={isLoading}
+            disabled={isLocalLoading}
           >
-            {isLoading ? (
+            {isLocalLoading ? (
               <ActivityIndicator color="white" />
             ) : (
               <Text className="text-white font-semibold text-lg text-center">
@@ -193,25 +161,31 @@ const LoginScreen = ({ navigation }: any) => {
           </TouchableOpacity>
 
           <View className="flex-row items-center my-4">
-            <View style={{ flex: 1, height: 1, backgroundColor: '#ccc' }} />
+            <View className="flex-1 h-px bg-gray-300" />
             <Text className="mx-4 text-gray-500 font-medium bg-blue-50 px-2">
               OR
             </Text>
-            <View style={{ flex: 1, height: 1, backgroundColor: '#ccc' }} />
+            <View className="flex-1 h-px bg-gray-300" />
           </View>
 
           <TouchableOpacity
             className="bg-white border border-gray-300 rounded-lg py-4 mb-4 flex-row justify-center items-center"
             onPress={handleGoogleSignIn}
           >
-            <Image
-              source={require('../../assets/google-logo.png')}
-              style={{ width: 24, height: 24, marginRight: 10 }}
-              resizeMode="contain"
-            />
-            <Text className="text-gray-700 font-medium text-base">
-              Sign In with Google
-            </Text>
+            {isGoogleLoading ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <>
+                <Image
+                  source={require('../../assets/google-logo.png')}
+                  className="w-6 h-6 mr-3"
+                  resizeMode="contain"
+                />
+                <Text className="text-gray-700 font-medium text-base">
+                  Sign In with Google
+                </Text>
+              </>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -222,11 +196,8 @@ const LoginScreen = ({ navigation }: any) => {
             </Text>
           </TouchableOpacity>
         </View>
-
-        <TouchableOpacity className="items-center mt-4">
-          <Text className="text-gray-500 font-medium">Forgot Password?</Text>
-        </TouchableOpacity>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };

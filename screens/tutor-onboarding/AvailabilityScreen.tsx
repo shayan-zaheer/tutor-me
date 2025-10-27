@@ -261,7 +261,7 @@ const AvailabilityScreen = () => {
       />
 
       {slots.length !== 0 ? (
-        <View className="">
+        <View className="flex-1">
           <FlatList
             data={slots}
             horizontal={false}
@@ -284,7 +284,7 @@ const AvailabilityScreen = () => {
         </View>
       )}
 
-      <View className="items-center">
+      <View className="">
         <TouchableOpacity
           className="p-4 bg-teal-100 rounded-lg flex-row items-center justify-center gap-x-2 w-full"
           onPress={() => setModal(true)}
