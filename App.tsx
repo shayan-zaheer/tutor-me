@@ -1,21 +1,23 @@
 import './global.css';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { enableScreens } from 'react-native-screens';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import { View, Text, ActivityIndicator } from 'react-native';
+import SplashScreen from 'react-native-splash-screen';
 
 import LoginScreen from './screens/auth/LoginScreen';
 import SignUpScreen from './screens/auth/SignUpScreen';
 import Tabs from './navigation/Tabs';
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-enableScreens();
-
 const Stack = createNativeStackNavigator();
 
 export default function App() {
+  useEffect(() => {
+    SplashScreen.hide();
+  }, []);
+
   const navigationRef = useRef(null);
   const [initializing, setInitializing] = useState(true);
   const [user, setUser] = useState<FirebaseAuthTypes.User | null>(null);

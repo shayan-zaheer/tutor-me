@@ -1,7 +1,6 @@
 import {
   Text,
   View,
-  TextInput,
   TouchableOpacity,
   Alert,
   ActivityIndicator,
@@ -15,6 +14,7 @@ import auth from '@react-native-firebase/auth';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import firestore from '@react-native-firebase/firestore';
 import { WEB_CLIENT_ID } from '@env';
+import AuthInput from '../../components/AuthInput';
 GoogleSignin.configure({
   webClientId: WEB_CLIENT_ID,
   offlineAccess: true,
@@ -99,7 +99,7 @@ const SignUpScreen = ({ navigation }: any) => {
       const idToken = signInResult.data?.idToken;
 
       if (!idToken) {
-        throw new Error('Failed to get ID token from Google Sign-In');
+        throw new Error('Login failed');
       }
 
       const googleCredential = auth.GoogleAuthProvider.credential(idToken);
@@ -132,8 +132,8 @@ const SignUpScreen = ({ navigation }: any) => {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+      behavior={'padding'}
+      keyboardVerticalOffset={100}
       className="flex-1 bg-blue-50"
     >
       <ScrollView
@@ -156,14 +156,10 @@ const SignUpScreen = ({ navigation }: any) => {
             <Text className="font-medium text-black mb-2 text-sm">
               Full Name
             </Text>
-            <TextInput
-              className="bg-white border border-gray-300 text-black rounded-lg px-4 py-3"
+            <AuthInput
               placeholder="Enter your full name"
-              placeholderTextColor="#666"
               value={fullName}
               onChangeText={setFullName}
-              autoCapitalize="words"
-              autoCorrect={false}
             />
           </View>
 
@@ -171,15 +167,11 @@ const SignUpScreen = ({ navigation }: any) => {
             <Text className="font-medium text-black mb-2 text-sm">
               Email Address
             </Text>
-            <TextInput
-              className="bg-white border border-gray-300 text-black rounded-lg px-4 py-3"
+            <AuthInput
               placeholder="Enter your email"
-              placeholderTextColor="#666"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
             />
           </View>
 
@@ -187,14 +179,11 @@ const SignUpScreen = ({ navigation }: any) => {
             <Text className="font-medium text-black mb-2 text-sm">
               Password
             </Text>
-            <TextInput
-              className="bg-white border border-gray-300 rounded-lg text-black px-4 py-3"
+            <AuthInput
               placeholder="Create a password (min 6 characters)"
-              placeholderTextColor="#666"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
-              autoCapitalize="none"
             />
           </View>
 
@@ -202,14 +191,11 @@ const SignUpScreen = ({ navigation }: any) => {
             <Text className="font-medium text-black mb-2 text-sm">
               Confirm Password
             </Text>
-            <TextInput
-              className="bg-white border border-gray-300 rounded-lg text-black px-4 py-3"
+            <AuthInput
               placeholder="Confirm your password"
-              placeholderTextColor="#666"
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               secureTextEntry
-              autoCapitalize="none"
             />
           </View>
 
@@ -243,7 +229,7 @@ const SignUpScreen = ({ navigation }: any) => {
             disabled={isGoogleLoading}
           >
             {isGoogleLoading ? (
-              <ActivityIndicator color="white" />
+              <ActivityIndicator color="black" />
             ) : (
               <>
                 <Image

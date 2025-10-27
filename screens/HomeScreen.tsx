@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   ScrollView,
   FlatList,
+  Modal,
 } from 'react-native';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
@@ -12,6 +13,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { Tutor, Profile, QuickStat } from '../types';
 
 const HomeScreen = ({ navigation }: any) => {
+  const [logoutModal, setLogoutModal] = useState(false);
   const [quickStats, setQuickStats] = useState<QuickStat[]>([
     {
       title: 'Available Tutors',
@@ -74,12 +76,13 @@ const HomeScreen = ({ navigation }: any) => {
       .onSnapshot(snapshot =>
         setQuickStats(previous => {
           const updated = [...previous];
+          const subjectsSet = new Set();
+
           snapshot.docs.forEach(doc => {
             const data = doc.data();
             updated[0].value = snapshot.size;
 
-            const speciality: string = data?.profile?.speciality || '';
-            const subjectsSet = new Set<string>();
+            const speciality = data?.profile?.speciality || '';
             subjectsSet.add(speciality);
             updated[1].value = subjectsSet.size;
 
@@ -162,7 +165,7 @@ const HomeScreen = ({ navigation }: any) => {
           </View>
           <TouchableOpacity
             className="bg-white/20 p-3 rounded-full"
-            onPress={handleSignOut}
+            onPress={() => setLogoutModal(true)}
           >
             <Icon name="log-out-outline" size={24} color="white" />
           </TouchableOpacity>
@@ -258,6 +261,33 @@ const HomeScreen = ({ navigation }: any) => {
           contentContainerStyle={{ paddingHorizontal: 24 }}
         />
       </View>
+
+      <Modal
+        visible={logoutModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLogoutModal(false)}
+      >
+        <View className='flex-1 items-center justify-center bg-black/50'>
+          <View className='bg-white p-4 w-full max-w-sm rounded-lg'>
+            <Text className='text-lg font-bold text-center text-gray-800 mb-4'>
+              Confirm Logout
+              </Text>
+              <Text className='text-center'>
+                Are you sure you want to log out?
+              </Text>
+
+              <View className='flex-row mt-4'>
+                <TouchableOpacity className='bg-teal-600 px-6 py-3 flex-1 rounded-xl mr-2' onPress={() => setLogoutModal(false)}>
+                  <Text className='font-semibold text-center text-white'>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleSignOut} className='bg-red-600 px-6 py-3 flex-1 rounded-xl ml-2'>
+                  <Text className='text-center text-white font-semibold'>Logout</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };

@@ -79,8 +79,11 @@ const AvailabilityScreen = () => {
       .onSnapshot(snapshot => {
         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
+        const now = new Date();
         const refined = data.flatMap((schedule: any) =>
-          schedule.slots?.map((slot: any) => ({
+          schedule.slots?.filter((slot: any) => {
+            return slot.startTime.toDate() >= now;
+          }).map((slot: any) => ({
             id: uuidv4(),
             time: `${slot.startTime.toDate().toLocaleTimeString('en-GB', {
               hour: '2-digit',

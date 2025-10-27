@@ -1,4 +1,4 @@
-import { Text, View, TextInput, TouchableOpacity } from 'react-native';
+import { Text, View, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { useEffect, useState } from 'react';
 import CommunicationMethod from '../../components/CommunicationMethod';
 import firestore from '@react-native-firebase/firestore';
@@ -79,7 +79,7 @@ const ContactInfoScreen = () => {
           name="lock-closed"
           size={20}
           color="#008080"
-          style={{ marginRight: 16 }}
+          style={styles.icon}
         />
         <Text className="text-sm text-gray-600 flex-1">
           Your contact details will only be shared with a student after they
@@ -89,7 +89,7 @@ const ContactInfoScreen = () => {
 
       <TouchableOpacity
         className="bg-teal-600 rounded-xl p-4 items-center justify-center mt-4"
-        style={{ elevation: 5 }}
+        style={styles.button}
         onPress={handleNumberSave}
       >
         <Text className="font-bold text-white">Continue</Text>
@@ -99,3 +99,12 @@ const ContactInfoScreen = () => {
 };
 
 export default ContactInfoScreen;
+
+const styles = StyleSheet.create({
+   button: {
+    elevation: 5
+   }, 
+   icon: {
+    marginRight: 16
+   }
+})

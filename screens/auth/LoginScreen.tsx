@@ -173,7 +173,7 @@ const LoginScreen = ({ navigation }: any) => {
             onPress={handleGoogleSignIn}
           >
             {isGoogleLoading ? (
-              <ActivityIndicator color="white" />
+              <ActivityIndicator color="black" />
             ) : (
               <>
                 <Image

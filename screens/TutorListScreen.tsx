@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -25,9 +25,14 @@ const TutorListScreen = () => {
   const [allTutors, setAllTutors] = useState<Tutor[]>([]);
   const [filteredTutors, setFilteredTutors] = useState<Tutor[]>([]);
   const currentUser = auth().currentUser;
+  const debounceTimeout = useRef<any>(null);
 
-  const debouncedSearch = useCallback(
-    debounce((query: string, tutors: any[]) => {
+  const debouncedSearch = useCallback((query: string, tutors: any[]) => {
+    if (debounceTimeout.current) {
+      clearTimeout(debounceTimeout.current);
+    }
+
+    debounceTimeout.current = setTimeout(() => {
       if (!query.trim()) {
         setFilteredTutors(tutors);
         return;
@@ -44,91 +49,113 @@ const TutorListScreen = () => {
         return nameMatch || specialityMatch;
       });
       setFilteredTutors(filtered);
-    }, 500),
-    []
-  );
-
-  function debounce(func: (...args: any[]) => void, delay: number) {
-    let timeout: any;
-    return (...args: any[]) => {
-      clearTimeout(timeout);
-      timeout = setTimeout(() => {
-        func(...args);
-      }, delay);
-    };
-  }
+    }, 500);
+  }, []);
 
   useEffect(() => {
     setIsLoading(true);
     const selfRef = firestore().collection('users').doc(currentUser?.uid);
 
-    const unsubscribe = firestore()
+    let latestSchedules: any[] = [];
+    let latestBookings: any[] = [];
+
+    const processAndSet = (schedulesData: any[], bookingsData: any[]) => {
+      try {
+        const now = new Date();
+
+        const bookedSlots = new Set<string>();
+        bookingsData.forEach(b => {
+          const booking = b;
+          if (!booking || !booking.bookedSlot) return;
+          const tutorId = booking.tutor?.id;
+          const start =
+            booking.bookedSlot.startTime?.toMillis?.() ??
+            booking.bookedSlot.startTime;
+          const end =
+            booking.bookedSlot.endTime?.toMillis?.() ??
+            booking.bookedSlot.endTime;
+          if (tutorId && start && end) {
+            bookedSlots.add(`${tutorId}-${start}-${end}`);
+          }
+        });
+
+        const tutorsWithBookingStatus = schedulesData
+          .map((schedule: any) => {
+            const tutorId = schedule.tutorId?.id;
+            const slotsWithStatus = (schedule.slots || [])
+              .filter((slot: any) => slot.startTime.toDate() >= now)
+              .map((slot: any, index: number) => {
+                const startMillis = slot.startTime.toMillis();
+                const endMillis = slot.endTime.toMillis();
+                const slotKey = `${tutorId}-${startMillis}-${endMillis}`;
+                const isBooked = bookedSlots.has(slotKey);
+
+                return {
+                  ...slot,
+                  id: `${schedule.id}-${index}`,
+                  scheduleId: schedule.id,
+                  day: `${slot.startTime
+                    .toDate()
+                    .toLocaleDateString('en-GB', { weekday: 'long' })
+                    .substring(0, 3)} ${slot.startTime
+                    .toDate()
+                    .toLocaleDateString('en-GB')}`,
+                  isBooked,
+                };
+              });
+
+            return { ...schedule, slots: slotsWithStatus };
+          })
+          .filter((s: any) => (s.slots || []).length > 0);
+
+        setAllTutors(tutorsWithBookingStatus);
+        setFilteredTutors(tutorsWithBookingStatus);
+        setIsLoading(false);
+      } catch (err) {
+        console.error('Error in processing schedules/bookings:', err);
+        setIsLoading(false);
+      }
+    };
+
+    const schedulesUnsub = firestore()
       .collection('schedules')
       .where('tutorId', '!=', selfRef)
       .onSnapshot(async schedulesSnapshot => {
         try {
-          const schedulesWithPopulatedData = await Promise.all(
+          const populated = await Promise.all(
             schedulesSnapshot.docs.map(async (doc: any) => {
               const data = doc.data();
               const populatedData = await populateReferences(data);
               return { id: doc.id, ...populatedData };
             }),
           );
-
-          const bookingsSnapshot = await firestore()
-            .collection('bookings')
-            .get();
-          const bookedSlots = new Set();
-
-          bookingsSnapshot.docs.forEach((doc: any) => {
-            const booking = doc.data();
-            if (booking.schedule && booking.bookedSlot) {
-              const slotKey = `${
-                booking.schedule.id
-              }-${booking.bookedSlot.startTime.toMillis()}-${booking.bookedSlot.endTime.toMillis()}`;
-              bookedSlots.add(slotKey);
-            }
-          });
-
-          const tutorsWithBookingStatus = schedulesWithPopulatedData.map(
-            schedule => {
-              const slotsWithStatus = schedule.slots.map(
-                (slot: any, index: number) => {
-                  const slotKey = `${
-                    schedule.id
-                  }-${slot.startTime.toMillis()}-${slot.endTime.toMillis()}`;
-                  return {
-                    ...slot,
-                    id: `${schedule.id}-${index}`,
-                    scheduleId: schedule.id,
-                    day: `${slot.startTime
-                      .toDate()
-                      .toLocaleDateString('en-GB', { weekday: 'long' })
-                      .substring(0, 3)} ${slot.startTime
-                      .toDate()
-                      .toLocaleDateString('en-GB')}`,
-                    isBooked: bookedSlots.has(slotKey),
-                  };
-                },
-              );
-
-              return {
-                ...schedule,
-                slots: slotsWithStatus,
-              };
-            },
-          );
-
-          setAllTutors(tutorsWithBookingStatus);
-          setFilteredTutors(tutorsWithBookingStatus);
-          setIsLoading(false);
+          latestSchedules = populated;
+          processAndSet(latestSchedules, latestBookings);
         } catch (err) {
-          console.error('Error processing tutors:', err);
+          console.error('Error populating schedules:', err);
           setIsLoading(false);
         }
       });
 
-    return () => unsubscribe();
+    const bookingsUnsub = firestore()
+      .collection('bookings')
+      .onSnapshot(bookingsSnapshot => {
+        try {
+          latestBookings = bookingsSnapshot.docs.map((d: any) => ({
+            id: d.id,
+            ...d.data(),
+          }));
+          processAndSet(latestSchedules, latestBookings);
+        } catch (err) {
+          console.error('Error reading bookings:', err);
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      schedulesUnsub();
+      bookingsUnsub();
+    };
   }, [currentUser?.uid]);
 
   useEffect(() => {
@@ -148,8 +175,6 @@ const TutorListScreen = () => {
     setSelectedSlot(slot);
     setShowBookingModal(true);
   };
-
-
 
   const confirmBooking = async () => {
     if (!selectedTutor || !selectedSlot || !currentUser) return;
@@ -184,14 +209,14 @@ const TutorListScreen = () => {
       if (hasTimeConflict) {
         Alert.alert(
           'Booking Conflict',
-          'You already have a booking at this time. Please choose a different time slot.',
+          'You already have a booking at this time.',
         );
         return;
       }
 
       const studentSchedulesSnapshot = await firestore()
         .collection('schedules')
-        .where('tutor', '==', selfRef)
+        .where('tutorId', '==', selfRef)
         .get();
 
       const hasTeachingConflict = studentSchedulesSnapshot.docs.some(doc => {
@@ -225,22 +250,22 @@ const TutorListScreen = () => {
         .collection('schedules')
         .doc(selectedSlot.scheduleId);
 
-      await firestore()
-        .collection('bookings')
-        .add({
-          tutor: tutorRef,
-          student: selfRef,
-          schedule: scheduleRef,
-          bookedSlot: {
-            startTime: selectedSlot.startTime,
-            endTime: selectedSlot.endTime,
-            price: selectedSlot.price,
-          },
-          ratings: 0,
-          isPaid: true,
-          review: '',
-          createdAt: firestore.FieldValue.serverTimestamp(),
-        });
+      const bookingData = {
+        tutor: tutorRef,
+        student: selfRef,
+        schedule: scheduleRef,
+        bookedSlot: {
+          startTime: selectedSlot.startTime,
+          endTime: selectedSlot.endTime,
+          price: selectedSlot.price,
+        },
+        ratings: 0,
+        isPaid: true,
+        review: '',
+        createdAt: firestore.FieldValue.serverTimestamp(),
+      };
+
+      await firestore().collection('bookings').add(bookingData);
 
       setShowBookingModal(false);
 
@@ -248,7 +273,9 @@ const TutorListScreen = () => {
         'Booking Confirmed!',
         `Your session with ${
           (selectedTutor as any).tutorId?.name || 'the tutor'
-        } on ${selectedSlot.day} has been booked.`,
+        } on ${selectedSlot.day} has been booked. His contact number is ${
+          (selectedTutor as any)?.tutorId?.contact
+        }. Copy it because due to privacy policies, you won't be able to see it again.`,
         [{ text: 'OK' }],
       );
 
@@ -403,11 +430,11 @@ const TutorListScreen = () => {
                   {(selectedTutor as any).tutorId?.name || 'the tutor'}?
                 </Text>
                 <Text className="font-semibold text-center mb-4">
-                  {selectedSlot.day} at
+                  {selectedSlot.day} at{' '}
                   {selectedSlot.startTime.toDate().toLocaleTimeString('en-GB', {
                     hour: '2-digit',
                     minute: '2-digit',
-                  })}
+                  })}{' '}
                   -{' '}
                   {selectedSlot.endTime.toDate().toLocaleTimeString('en-GB', {
                     hour: '2-digit',
