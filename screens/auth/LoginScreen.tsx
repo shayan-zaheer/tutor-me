@@ -2,27 +2,15 @@ import {
   Text,
   View,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   ScrollView,
   Image,
   KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import React, { useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import auth from '@react-native-firebase/auth';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
-import firestore from "@react-native-firebase/firestore";
-import { WEB_CLIENT_ID } from '@env';
+import { signInWithEmailAndPasswordService, signInWithGoogleService } from '../../services/userService';
 import AuthInput from '../../components/AuthInput';
-
-GoogleSignin.configure({
-  webClientId: WEB_CLIENT_ID,
-  offlineAccess: true,
-  hostedDomain: '',
-  forceCodeForRefreshToken: true,
-});
 
 const LoginScreen = ({ navigation }: any) => {
   const [email, setEmail] = useState('');
@@ -31,79 +19,18 @@ const LoginScreen = ({ navigation }: any) => {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const handleAuth = async () => {
-    if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      Alert.alert('Error', 'Please enter a valid email address');
-      return;
-    }
-    if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters long');
-      return;
-    }
-
-    setIsLocalLoading(true);
-
-    try {
-      await auth().signInWithEmailAndPassword(email.trim(), password);
-    } catch (error: any) {
-      console.error('Authentication error:', error);
-      Alert.alert('Error', error.message || 'Authentication failed');
-    } finally {
-      setIsLocalLoading(false);
-    }
+    await signInWithEmailAndPasswordService(email, password, setIsLocalLoading);
   };
 
   const handleGoogleSignIn = async () => {
-    try {
-      setIsGoogleLoading(true);
-
-      await GoogleSignin.hasPlayServices({
-        showPlayServicesUpdateDialog: true,
-      });
-
-      await GoogleSignin.signOut();
-
-      const signInResult = await GoogleSignin.signIn();
-      const idToken = signInResult.data?.idToken;
-
-      if (!idToken) {
-        throw new Error('Failed to get ID token from Google Sign-In');
-      }
-
-      const googleCredential = auth.GoogleAuthProvider.credential(idToken);
-      const userCredential = await auth().signInWithCredential(
-        googleCredential,
-      );
-
-      const user = userCredential.user;
-      const userRef = firestore().collection('users').doc(user.uid);
-      const docSnap = await userRef.get();
-
-      if (!docSnap.exists()) {
-        await userRef.set({
-          id: user.uid,
-          email: user.email,
-          name: user.displayName,
-          provider: 'google',
-          createdAt: firestore.FieldValue.serverTimestamp(),
-        });
-      }
-    } catch (error: any) {
-      Alert.alert('Google Sign-Up Error', error.message || 'Google Sign-Up failed');
-    } finally {
-      setIsGoogleLoading(false);
-    }
+    await signInWithGoogleService(setIsGoogleLoading);
   };
 
   return (
     <SafeAreaView className="flex-1 bg-blue-50">
       <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+        behavior={'padding'}
+        keyboardVerticalOffset={100}
         className="flex-1"
       >
         <ScrollView

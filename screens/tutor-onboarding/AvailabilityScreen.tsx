@@ -15,11 +15,17 @@ import auth from '@react-native-firebase/auth';
 import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
 import { getDateOccurrence } from '../../utils/getDateOccurrence';
+import { DAYS_OF_WEEK, DayOfWeek } from '../../constants/days';
 
 const AvailabilityScreen = () => {
   const [showModal, setModal] = useState<boolean>(false);
-  const [newSlot, setNewSlot] = useState({
-    day: 'Monday',
+  const [newSlot, setNewSlot] = useState<{
+    day: DayOfWeek;
+    startTime: string;
+    endTime: string;
+    price: string;
+  }>({
+    day: DAYS_OF_WEEK[0],
     startTime: '',
     endTime: '',
     price: '',
@@ -125,7 +131,7 @@ const AvailabilityScreen = () => {
     </View>
   );
 
-  const renderDays = ({ item }: { item: string }) => (
+  const renderDays = ({ item }: { item: DayOfWeek }) => (
     <TouchableOpacity onPress={() => setNewSlot({ ...newSlot, day: item })}>
       <View
         className={`p-4 rounded-full items-center justify-center ${
@@ -143,15 +149,7 @@ const AvailabilityScreen = () => {
     </TouchableOpacity>
   );
 
-  const days = [
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-    'Saturday',
-    'Sunday',
-  ];
+  const days = DAYS_OF_WEEK;
 
   const timeOptions = [
     '09:00',
@@ -241,7 +239,7 @@ const AvailabilityScreen = () => {
     setModal(false);
 
     setNewSlot({
-      day: 'Monday',
+      day: DAYS_OF_WEEK[0],
       startTime: '',
       endTime: '',
       price: '',

@@ -1,12 +1,13 @@
+import { DAYS_OF_WEEK } from '../constants/days';
+
 export function getDateOccurrence(dayName: string): Date {
-  const daysOfWeek = [
-    "Sunday", "Monday", "Tuesday", "Wednesday",
-    "Thursday", "Friday", "Saturday"
-  ];
+  // Note: JavaScript Date.getDay() returns 0 for Sunday, 1 for Monday, etc.
+  // But our DAYS_OF_WEEK starts with Monday. So we need to adjust.
+  const jsWeekDays = ["Sunday", ...DAYS_OF_WEEK];
 
   const today = new Date();
   const todayIndex = today.getDay();
-  const targetIndex = daysOfWeek.indexOf(dayName);
+  const targetIndex = jsWeekDays.indexOf(dayName);
 
   if (targetIndex === -1) throw new Error("Invalid day name");
 
