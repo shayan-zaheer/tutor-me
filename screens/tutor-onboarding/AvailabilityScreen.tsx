@@ -16,6 +16,7 @@ import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
 import { getDateOccurrence } from '../../utils/getDateOccurrence';
 import { DAYS_OF_WEEK, DayOfWeek } from '../../constants/days';
+import { formatTimeRange } from '../../utils/dateUtil';
 
 const AvailabilityScreen = () => {
   const [showModal, setModal] = useState<boolean>(false);
@@ -46,15 +47,7 @@ const AvailabilityScreen = () => {
         const receivedSlots = schedule.slots || [];
 
         const updatedSlots = receivedSlots.filter((slot: any) => {
-          const start = slot.startTime.toDate().toLocaleTimeString('en-GB', {
-            hour: '2-digit',
-            minute: '2-digit',
-          });
-          const end = slot.endTime.toDate().toLocaleTimeString('en-GB', {
-            hour: '2-digit',
-            minute: '2-digit',
-          });
-          const time = `${start} - ${end}`;
+          const time = formatTimeRange(slot.startTime, slot.endTime);
           const day = slot.startTime
             .toDate()
             .toLocaleDateString('en-GB', { weekday: 'long' });

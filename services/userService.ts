@@ -1,6 +1,7 @@
 import { Alert } from 'react-native';
-import firestore from "@react-native-firebase/firestore";
+import auth from '@react-native-firebase/auth';
 import { testLoginFields } from '../validation/userValidation';
+import { normalSignInRepository, googleSignInRepository, createUserWithEmailAndPasswordRepository } from '../repos/userRepository';
 
 const signInWithEmailAndPasswordService = async (email: string, password: string, setIsLocalLoading: (loading: boolean) => void) => {
     if (!testLoginFields(email, password)) {
@@ -23,38 +24,62 @@ const signInWithEmailAndPasswordService = async (email: string, password: string
 const signInWithGoogleService = async (setIsGoogleLoading: (loading: boolean) => void) => {
     try {
       setIsGoogleLoading(true);
+      await googleSignInRepository();
+    } catch (error: any) {
+      Alert.alert('Google Sign-Up Error', error.message || 'Google Sign-Up failed');
+    } finally {
+      setIsGoogleLoading(false);
+    }
+};
 
-      await GoogleSignin.hasPlayServices({
-        showPlayServicesUpdateDialog: true,
-      });
+const signUpWithEmailAndPasswordService = async (
+    email: string, 
+    password: string, 
+    confirmPassword: string, 
+    fullName: string, 
+    setIsLocalLoading: (loading: boolean) => void
+) => {
+    if (!fullName.trim()) {
+        Alert.alert('Error', 'Please enter your full name');
+        return;
+    }
 
-      await GoogleSignin.signOut();
+    if (!email || !password || !confirmPassword) {
+        Alert.alert('Error', 'Please fill in all fields');
+        return;
+    }
 
-      const signInResult = await GoogleSignin.signIn();
-      const idToken = signInResult.data?.idToken;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        Alert.alert('Error', 'Please enter a valid email address');
+        return;
+    }
 
-      if (!idToken) {
-        throw new Error('Failed to get ID token from Google Sign-In');
-      }
+    if (password.length < 6) {
+        Alert.alert('Error', 'Password must be at least 6 characters long');
+        return;
+    }
 
-      const googleCredential = auth.GoogleAuthProvider.credential(idToken);
-      const userCredential = await auth().signInWithCredential(
-        googleCredential,
-      );
+    if (password !== confirmPassword) {
+        Alert.alert('Error', 'Passwords do not match');
+        return;
+    }
 
-      const user = userCredential.user;
-      const userRef = firestore().collection('users').doc(user.uid);
-      const docSnap = await userRef.get();
+    setIsLocalLoading(true);
 
-      if (!docSnap.exists()) {
-        await userRef.set({
-          id: user.uid,
-          email: user.email,
-          name: user.displayName,
-          provider: 'google',
-          createdAt: firestore.FieldValue.serverTimestamp(),
-        });
-      }
+    try {
+        await createUserWithEmailAndPasswordRepository(email, password, fullName);
+    } catch (error: any) {
+        Alert.alert('SignUp Error', error.message || 'Account creation failed');
+    } finally {
+        setIsLocalLoading(false);
+    }
+};
+
+const signUpWithGoogleService = async (setIsGoogleLoading: (loading: boolean) => void) => {
+    try {
+      setIsGoogleLoading(true);
+      await googleSignInRepository();
     } catch (error: any) {
       Alert.alert('Google Sign-Up Error', error.message || 'Google Sign-Up failed');
     } finally {
@@ -66,4 +91,10 @@ const getAuthService = () => {
     return auth();
 };
 
-export { signInWithEmailAndPasswordService, signInWithGoogleService, getAuthService };
+export { 
+    signInWithEmailAndPasswordService, 
+    signInWithGoogleService, 
+    signUpWithEmailAndPasswordService,
+    signUpWithGoogleService,
+    getAuthService 
+};

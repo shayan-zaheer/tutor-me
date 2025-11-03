@@ -15,6 +15,12 @@ import auth from '@react-native-firebase/auth';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { Booking } from '../types';
 import { populateReferences } from '../utils/populateReferences';
+import { 
+  formatBookingCardDisplay, 
+  getCurrentDate, 
+  timestampToDate,
+  sortBookingsByDate
+} from '../utils/dateUtil';
 
 const MyBookingsScreen = () => {
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -138,8 +144,8 @@ const MyBookingsScreen = () => {
   };
 
   const renderBookingCard = ({ item: booking }: { item: any }) => {
-    const now = new Date();
-    const bookingTime = booking.bookedSlot.startTime.toDate();
+    const now = getCurrentDate();
+    const bookingTime = timestampToDate(booking.bookedSlot.startTime);
     const isPastBooking = bookingTime < now;
 
     return (
@@ -174,23 +180,7 @@ const MyBookingsScreen = () => {
                     isPastBooking ? 'text-gray-500' : 'text-gray-700'
                   }`}
                 >
-                  {booking.bookedSlot.startTime
-                    .toDate()
-                    .toLocaleDateString('en-GB')}{' '}
-                  |{' '}
-                  {booking.bookedSlot.startTime
-                    .toDate()
-                    .toLocaleTimeString('en-GB', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}{' '}
-                  -{' '}
-                  {booking.bookedSlot.endTime
-                    .toDate()
-                    .toLocaleTimeString('en-GB', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}{' '}
+                  {formatBookingCardDisplay(booking.bookedSlot.startTime, booking.bookedSlot.endTime)}
                   | {'$' + booking.bookedSlot.price}
                 </Text>
               </View>
@@ -282,13 +272,13 @@ const MyBookingsScreen = () => {
       ) : (
         <ScrollView showsVerticalScrollIndicator={false}>
           {(() => {
-            const now = new Date();
-            const upcomingBookings = bookings.filter(
-              booking => booking.bookedSlot.startTime.toDate() >= now,
-            );
-            const pastBookings = bookings.filter(
-              booking => booking.bookedSlot.startTime.toDate() < now,
-            );
+            const now = getCurrentDate();
+            const upcomingBookings = sortBookingsByDate(bookings.filter(
+              booking => timestampToDate(booking.bookedSlot.startTime) >= now,
+            ));
+            const pastBookings = sortBookingsByDate(bookings.filter(
+              booking => timestampToDate(booking.bookedSlot.startTime) < now,
+            ));
 
             return (
               <View className="mt-4">

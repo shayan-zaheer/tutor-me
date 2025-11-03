@@ -1,11 +1,10 @@
 import { DAYS_OF_WEEK } from '../constants/days';
+import { getCurrentDate } from './dateUtil';
 
 export function getDateOccurrence(dayName: string): Date {
-  // Note: JavaScript Date.getDay() returns 0 for Sunday, 1 for Monday, etc.
-  // But our DAYS_OF_WEEK starts with Monday. So we need to adjust.
   const jsWeekDays = ["Sunday", ...DAYS_OF_WEEK];
 
-  const today = new Date();
+  const today = getCurrentDate();
   const todayIndex = today.getDay();
   const targetIndex = jsWeekDays.indexOf(dayName);
 

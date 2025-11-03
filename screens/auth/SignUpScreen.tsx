@@ -2,25 +2,14 @@ import {
   Text,
   View,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   ScrollView,
   Image,
   KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { useState } from 'react';
-import auth from '@react-native-firebase/auth';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
-import firestore from '@react-native-firebase/firestore';
-import { WEB_CLIENT_ID } from '@env';
+import { signUpWithEmailAndPasswordService, signUpWithGoogleService } from '../../services/userService';
 import AuthInput from '../../components/AuthInput';
-GoogleSignin.configure({
-  webClientId: WEB_CLIENT_ID,
-  offlineAccess: true,
-  hostedDomain: '',
-  forceCodeForRefreshToken: true,
-});
 
 const SignUpScreen = ({ navigation }: any) => {
   const [fullName, setFullName] = useState('');
@@ -31,103 +20,17 @@ const SignUpScreen = ({ navigation }: any) => {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const handleSignUp = async () => {
-    if (!fullName.trim()) {
-      Alert.alert('Error', 'Please enter your full name');
-      return;
-    }
-
-    if (!email || !password || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      Alert.alert('Error', 'Please enter a valid email address');
-      return;
-    }
-
-    if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters long');
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
-      return;
-    }
-
-    setIsLocalLoading(true);
-
-    try {
-      const userCredential = await auth().createUserWithEmailAndPassword(
-        email.trim(),
-        password,
-      );
-
-      const user = userCredential.user;
-      const userRef = firestore().collection('users').doc(user.uid);
-      const docSnap = await userRef.get();
-
-      if (!docSnap.exists()) {
-        await userRef.set({
-          id: user.uid,
-          email: user.email,
-          name: fullName.trim(),
-          provider: 'email',
-          createdAt: firestore.FieldValue.serverTimestamp(),
-        });
-      }
-    } catch (error: any) {
-      Alert.alert('SignUp Error', error.message || 'Account creation failed');
-    } finally {
-      setIsLocalLoading(false);
-    }
+    await signUpWithEmailAndPasswordService(
+      email,
+      password,
+      confirmPassword,
+      fullName,
+      setIsLocalLoading
+    );
   };
 
   const handleGoogleSignUp = async () => {
-    try {
-      setIsGoogleLoading(true);
-
-      await GoogleSignin.hasPlayServices({
-        showPlayServicesUpdateDialog: true,
-      });
-
-      await GoogleSignin.signOut();
-
-      const signInResult = await GoogleSignin.signIn();
-      const idToken = signInResult.data?.idToken;
-
-      if (!idToken) {
-        throw new Error('Login failed');
-      }
-
-      const googleCredential = auth.GoogleAuthProvider.credential(idToken);
-      const userCredential = await auth().signInWithCredential(
-        googleCredential,
-      );
-
-      const user = userCredential.user;
-      const userRef = firestore().collection('users').doc(user.uid);
-      const docSnap = await userRef.get();
-
-      if (!docSnap.exists()) {
-        await userRef.set({
-          id: user.uid,
-          email: user.email,
-          name: user.displayName,
-          provider: 'google',
-          createdAt: firestore.FieldValue.serverTimestamp(),
-        });
-      }
-    } catch (error: any) {
-      Alert.alert(
-        'Google Sign-Up Error',
-        error.message || 'Google Sign-Up failed',
-      );
-    } finally {
-      setIsGoogleLoading(false);
-    }
+    await signUpWithGoogleService(setIsGoogleLoading);
   };
 
   return (

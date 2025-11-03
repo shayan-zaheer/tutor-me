@@ -14,6 +14,13 @@ import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { populateReferences } from '../utils/populateReferences';
+import { 
+  formatSlotDate, 
+  formatTimeRange, 
+  getCurrentDate,
+  timestampToDate,
+  timestampToMillis
+} from '../utils/dateUtil';
 import { Tutor } from '../types';
 
 const TutorListScreen = () => {
@@ -61,7 +68,7 @@ const TutorListScreen = () => {
 
     const processAndSet = (schedulesData: any[], bookingsData: any[]) => {
       try {
-        const now = new Date();
+        const now = getCurrentDate();
 
         const bookedSlots = new Set<string>();
         bookingsData.forEach(b => {
@@ -70,10 +77,10 @@ const TutorListScreen = () => {
           const tutorId = booking.tutor?.id;
           const start =
             booking.bookedSlot.startTime?.toMillis?.() ??
-            booking.bookedSlot.startTime;
+            timestampToMillis(booking.bookedSlot.startTime);
           const end =
             booking.bookedSlot.endTime?.toMillis?.() ??
-            booking.bookedSlot.endTime;
+            timestampToMillis(booking.bookedSlot.endTime);
           if (tutorId && start && end) {
             bookedSlots.add(`${tutorId}-${start}-${end}`);
           }
@@ -83,10 +90,10 @@ const TutorListScreen = () => {
           .map((schedule: any) => {
             const tutorId = schedule.tutorId?.id;
             const slotsWithStatus = (schedule.slots || [])
-              .filter((slot: any) => slot.startTime.toDate() >= now)
+              .filter((slot: any) => timestampToDate(slot.startTime) >= now)
               .map((slot: any, index: number) => {
-                const startMillis = slot.startTime.toMillis();
-                const endMillis = slot.endTime.toMillis();
+                const startMillis = timestampToMillis(slot.startTime);
+                const endMillis = timestampToMillis(slot.endTime);
                 const slotKey = `${tutorId}-${startMillis}-${endMillis}`;
                 const isBooked = bookedSlots.has(slotKey);
 
@@ -94,12 +101,7 @@ const TutorListScreen = () => {
                   ...slot,
                   id: `${schedule.id}-${index}`,
                   scheduleId: schedule.id,
-                  day: `${slot.startTime
-                    .toDate()
-                    .toLocaleDateString('en-GB', { weekday: 'long' })
-                    .substring(0, 3)} ${slot.startTime
-                    .toDate()
-                    .toLocaleDateString('en-GB')}`,
+                  day: formatSlotDate(slot.startTime),
                   isBooked,
                 };
               });
@@ -192,10 +194,10 @@ const TutorListScreen = () => {
       const hasTimeConflict = studentBookingsSnapshot.docs.some(doc => {
         const booking = doc.data();
         if (booking.bookedSlot) {
-          const existingStart = booking.bookedSlot.startTime.toDate();
-          const existingEnd = booking.bookedSlot.endTime.toDate();
-          const newStart = selectedSlot.startTime.toDate();
-          const newEnd = selectedSlot.endTime.toDate();
+          const existingStart = timestampToDate(booking.bookedSlot.startTime);
+          const existingEnd = timestampToDate(booking.bookedSlot.endTime);
+          const newStart = timestampToDate(selectedSlot.startTime);
+          const newEnd = timestampToDate(selectedSlot.endTime);
 
           return (
             (newStart >= existingStart && newStart < existingEnd) ||
@@ -223,10 +225,10 @@ const TutorListScreen = () => {
         const schedule = doc.data();
         if (schedule.slots) {
           return schedule.slots.some((slot: any) => {
-            const existingStart = slot.startTime.toDate();
-            const existingEnd = slot.endTime.toDate();
-            const newStart = selectedSlot.startTime.toDate();
-            const newEnd = selectedSlot.endTime.toDate();
+            const existingStart = timestampToDate(slot.startTime);
+            const existingEnd = timestampToDate(slot.endTime);
+            const newStart = timestampToDate(selectedSlot.startTime);
+            const newEnd = timestampToDate(selectedSlot.endTime);
 
             return (
               (newStart >= existingStart && newStart < existingEnd) ||
@@ -359,15 +361,7 @@ const TutorListScreen = () => {
                     {slot.day}
                   </Text>
                   <Text className="text-center text-gray-700">
-                    {slot.startTime.toDate().toLocaleTimeString('en-GB', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}{' '}
-                    -
-                    {slot.endTime.toDate().toLocaleTimeString('en-GB', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
+                    {formatTimeRange(slot.startTime, slot.endTime)}
                   </Text>
 
                   <Text className="text-center text-teal-600 font-semibold">
@@ -430,16 +424,7 @@ const TutorListScreen = () => {
                   {(selectedTutor as any).tutorId?.name || 'the tutor'}?
                 </Text>
                 <Text className="font-semibold text-center mb-4">
-                  {selectedSlot.day} at{' '}
-                  {selectedSlot.startTime.toDate().toLocaleTimeString('en-GB', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}{' '}
-                  -{' '}
-                  {selectedSlot.endTime.toDate().toLocaleTimeString('en-GB', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
+                  {selectedSlot.day} at {formatTimeRange(selectedSlot.startTime, selectedSlot.endTime)}
                 </Text>
                 <Text className="text-center text-lg font-bold text-teal-600 mb-6">
                   Total: ${selectedSlot.price}

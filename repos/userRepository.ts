@@ -48,4 +48,24 @@ const googleSignInRepository = async () => {
       }
 }
 
-export { normalSignInRepository, googleSignInRepository };
+const createUserWithEmailAndPasswordRepository = async (email: string, password: string, fullName: string) => {
+    const userCredential = await auth().createUserWithEmailAndPassword(email.trim(), password);
+    
+    const user = userCredential.user;
+    const userRef = firestore().collection('users').doc(user.uid);
+    const docSnap = await userRef.get();
+
+    if (!docSnap.exists()) {
+        await userRef.set({
+            id: user.uid,
+            email: user.email,
+            name: fullName.trim(),
+            provider: 'email',
+            createdAt: firestore.FieldValue.serverTimestamp(),
+        });
+    }
+
+    return userCredential;
+}
+
+export { normalSignInRepository, googleSignInRepository, createUserWithEmailAndPasswordRepository };
