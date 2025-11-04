@@ -16,7 +16,12 @@ import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
 import { getDateOccurrence } from '../../utils/getDateOccurrence';
 import { DAYS_OF_WEEK, DayOfWeek } from '../../constants/days';
-import { formatTimeRange } from '../../utils/dateUtil';
+import { 
+  formatTimeRange, 
+  timestampToDate, 
+  getCurrentDate,
+  formatDayName 
+} from '../../utils/dateUtil';
 
 const AvailabilityScreen = () => {
   const [showModal, setModal] = useState<boolean>(false);
@@ -48,9 +53,7 @@ const AvailabilityScreen = () => {
 
         const updatedSlots = receivedSlots.filter((slot: any) => {
           const time = formatTimeRange(slot.startTime, slot.endTime);
-          const day = slot.startTime
-            .toDate()
-            .toLocaleDateString('en-GB', { weekday: 'long' });
+          const day = formatDayName(slot.startTime, 'long');
 
           return !(time === slotToDelete.time && day === slotToDelete.day);
         });
@@ -78,25 +81,17 @@ const AvailabilityScreen = () => {
       .onSnapshot(snapshot => {
         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        const now = new Date();
+        const now = getCurrentDate();
         const refined = data.flatMap((schedule: any) =>
           schedule.slots?.filter((slot: any) => {
-            return slot.startTime.toDate() >= now;
+            return timestampToDate(slot.startTime) >= now;
           }).map((slot: any) => ({
             id: uuidv4(),
-            time: `${slot.startTime.toDate().toLocaleTimeString('en-GB', {
-              hour: '2-digit',
-              minute: '2-digit',
-            })} - ${slot.endTime.toDate().toLocaleTimeString('en-GB', {
-              hour: '2-digit',
-              minute: '2-digit',
-            })}`,
-            day: slot.startTime
-              .toDate()
-              .toLocaleDateString('en-GB', { weekday: 'long' }),
+            time: formatTimeRange(slot.startTime, slot.endTime),
+            day: formatDayName(slot.startTime, 'long'),
             difference: `${
-              +slot.endTime.toDate().getHours() -
-              +slot.startTime.toDate().getHours()
+              +timestampToDate(slot.endTime).getHours() -
+              +timestampToDate(slot.startTime).getHours()
             } hours`,
           })),
         );
@@ -183,8 +178,8 @@ const AvailabilityScreen = () => {
 
     const hasConflict = schedules.some((schedule: any) =>
       schedule.slots?.some((slot: any) => {
-        const existingStart = slot.startTime.toDate();
-        const existingEnd = slot.endTime.toDate();
+        const existingStart = timestampToDate(slot.startTime);
+        const existingEnd = timestampToDate(slot.endTime);
 
         return (
           (startDate >= existingStart && startDate < existingEnd) ||

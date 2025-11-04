@@ -68,6 +68,16 @@ export const formatSlotDate = (date: Date | FirebaseFirestoreTypes.Timestamp): s
   return `${day} ${dateStr}`;
 };
 
+export const formatDayName = (
+  date: Date | FirebaseFirestoreTypes.Timestamp, 
+  format: 'short' | 'long' = 'long'
+): string => {
+  const actualDate = date instanceof Date ? date : timestampToDate(date);
+  return actualDate.toLocaleDateString('en-GB', { 
+    weekday: format 
+  });
+};
+
 export const formatTimeRange = (
   startTime: Date | FirebaseFirestoreTypes.Timestamp,
   endTime: Date | FirebaseFirestoreTypes.Timestamp
@@ -196,6 +206,7 @@ export default {
   formatTime,
   formatDateTime,
   formatSlotDate,
+  formatDayName,
   formatTimeRange,
   formatBookingDisplay,
   formatBookingCardDisplay,

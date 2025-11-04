@@ -7,7 +7,6 @@ import {
   Alert,
   Modal,
   TextInput,
-  ScrollView,
   ActivityIndicator,
 } from 'react-native';
 import firestore from '@react-native-firebase/firestore';
@@ -22,6 +21,60 @@ import {
   sortBookingsByDate
 } from '../utils/dateUtil';
 
+const BookingSections = ({ bookings, renderBookingCard, selectedTab }: { 
+  bookings: Booking[], 
+  renderBookingCard: ({ item }: { item: any }) => React.JSX.Element,
+  selectedTab: 'upcoming' | 'completed'
+}) => {
+  const now = getCurrentDate();
+  const upcomingBookings = sortBookingsByDate(bookings.filter(
+    booking => timestampToDate(booking.bookedSlot.startTime) >= now,
+  ));
+  const pastBookings = sortBookingsByDate(bookings.filter(
+    booking => timestampToDate(booking.bookedSlot.startTime) < now,
+  ));
+
+  const sectionsData = [];
+  
+  if (selectedTab === 'upcoming' && upcomingBookings.length > 0) {
+    sectionsData.push(...upcomingBookings.map(booking => ({ type: 'booking', ...booking })));
+  }
+  
+  if (selectedTab === 'completed' && pastBookings.length > 0) {
+    sectionsData.push(...pastBookings.map(booking => ({ type: 'booking', ...booking })));
+  }
+
+  const renderItem = ({ item }: { item: any }) => {
+    return renderBookingCard({ item });
+  };
+
+  if (sectionsData.length === 0) {
+    return (
+      <View className="flex-1 justify-center items-center px-4">
+        <Icon name="calendar-outline" size={80} color="#14b8a6" />
+        <Text className="text-xl font-bold text-center mt-4 mb-2">
+          {selectedTab === 'upcoming' ? 'No Upcoming Sessions' : 'No Completed Sessions'}
+        </Text>
+        <Text className="text-gray-600 text-center">
+          {selectedTab === 'upcoming' 
+            ? 'Book a session with a tutor to get started!' 
+            : 'Your completed sessions will appear here.'}
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <FlatList
+      data={sectionsData}
+      keyExtractor={item => (item as any).key || (item as any).id}
+      renderItem={renderItem}
+      showsVerticalScrollIndicator={false}
+      className="pb-5"
+    />
+  );
+};
+
 const MyBookingsScreen = () => {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [showRatingModal, setShowRatingModal] = useState(false);
@@ -30,6 +83,7 @@ const MyBookingsScreen = () => {
   const [rating, setRating] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [review, setReview] = useState('');
+  const [selectedTab, setSelectedTab] = useState<'upcoming' | 'completed'>('upcoming');
   const currentUser = auth().currentUser;
 
   useEffect(() => {
@@ -100,8 +154,8 @@ const MyBookingsScreen = () => {
 
       const tutorRef = firestore().collection("users").doc((selectedBooking.tutor as any).id);
       
-      const currentRating = selectedBooking?.tutor?.profile?.rating || 0;
-      const currentTotalReviews = selectedBooking?.tutor?.profile?.totalReviews || 0;
+      const currentRating = (selectedBooking?.tutor as any)?.profile?.rating || 0;
+      const currentTotalReviews = (selectedBooking?.tutor as any)?.profile?.totalReviews || 0;
 
       const newTotalReviews = currentTotalReviews + 1;
       const newAverageRating = ((currentRating * currentTotalReviews) + rating) / newTotalReviews;
@@ -270,49 +324,43 @@ const MyBookingsScreen = () => {
           </Text>
         </View>
       ) : (
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {(() => {
-            const now = getCurrentDate();
-            const upcomingBookings = sortBookingsByDate(bookings.filter(
-              booking => timestampToDate(booking.bookedSlot.startTime) >= now,
-            ));
-            const pastBookings = sortBookingsByDate(bookings.filter(
-              booking => timestampToDate(booking.bookedSlot.startTime) < now,
-            ));
-
-            return (
-              <View className="mt-4">
-                {upcomingBookings.length > 0 && (
-                  <View className="mb-6">
-                    <Text className="text-xl font-bold text-gray-800 mx-4 mb-4">
-                      Upcoming Sessions
-                    </Text>
-                    <FlatList
-                      data={upcomingBookings}
-                      keyExtractor={item => item.id}
-                      renderItem={renderBookingCard}
-                      scrollEnabled={false}
-                    />
-                  </View>
-                )}
-
-                {pastBookings.length > 0 && (
-                  <View>
-                    <Text className="text-xl font-bold text-gray-800 mx-4 mb-4">
-                      Past Sessions
-                    </Text>
-                    <FlatList
-                      data={pastBookings}
-                      keyExtractor={item => item.id}
-                      renderItem={renderBookingCard}
-                      scrollEnabled={false}
-                    />
-                  </View>
-                )}
-              </View>
-            );
-          })()}
-        </ScrollView>
+        <View className="flex-1">
+          <View className="border border-gray-300 bg-[#F7F8FC] rounded-full flex-row justify-between items-center p-1 mb-3 mx-4 mt-4">
+            <TouchableOpacity
+              className={`flex-1 p-2 rounded-full ${
+                selectedTab === 'upcoming' ? 'bg-teal-700' : ''
+              }`}
+              onPress={() => setSelectedTab('upcoming')}
+            >
+              <Text
+                className={`text-center font-semibold ${
+                  selectedTab === 'upcoming' ? 'text-white' : 'text-gray-400'
+                }`}
+              >
+                Upcoming
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              className={`flex-1 p-2 rounded-full ${
+                selectedTab === 'completed' ? 'bg-teal-700' : ''
+              }`}
+              onPress={() => setSelectedTab('completed')}
+            >
+              <Text
+                className={`text-center font-semibold ${
+                  selectedTab === 'completed' ? 'text-white' : 'text-gray-400'
+                }`}
+              >
+                Completed
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <BookingSections 
+            bookings={bookings} 
+            renderBookingCard={renderBookingCard}
+            selectedTab={selectedTab}
+          />
+        </View>
       )}
 
       <Modal visible={showRatingModal} transparent animationType="fade">

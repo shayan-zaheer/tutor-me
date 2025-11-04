@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Modal, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -57,6 +57,11 @@ const ReviewProfileScreen = () => {
   };
 
   const handleSpecialitySave = async () => {
+    if (!selectedSpeciality || selectedSpeciality === 'Select your speciality') {
+      Alert.alert('Validation Error', 'Please select a speciality before saving.');
+      return;
+    }
+
     try {
       if (currentUser?.uid && user) {
         await firestore()
@@ -74,6 +79,27 @@ const ReviewProfileScreen = () => {
     } finally {
       setShowModal(null);
     }
+  };
+
+  const handleConfirmProfile = () => {
+    const hasValidName = user?.name && user.name.trim().length > 0;
+    const hasValidSpeciality = selectedSpeciality && selectedSpeciality !== 'Select your speciality';
+    
+    if (!hasValidName) {
+      Alert.alert('Profile Incomplete', 'Please add your name before confirming your profile.');
+      return;
+    }
+    
+    if (!hasValidSpeciality) {
+      Alert.alert('Profile Incomplete', 'Please select your speciality before confirming your profile.');
+      return;
+    }
+    
+    Alert.alert('Success', 'Profile confirmed successfully!', [
+      {
+        text: 'OK',
+      }
+    ]);
   };
 
   const [showModal, setShowModal] = useState<string | null>(null);
@@ -124,7 +150,10 @@ const ReviewProfileScreen = () => {
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity className="bg-teal-600 rounded-lg p-4">
+      <TouchableOpacity 
+        className="bg-teal-600 rounded-lg p-4"
+        onPress={handleConfirmProfile}
+      >
         <Text className="text-lg font-bold text-white text-center">
           Confirm & Activate Profile
         </Text>
