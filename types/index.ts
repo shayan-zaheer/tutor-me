@@ -7,6 +7,13 @@ export interface Profile {
   totalReviews: number;
 }
 
+export interface TutorSchedule {
+  id: string;
+  tutorId: User;
+  slots: ProcessedSlot[];
+}
+
+
 export interface Tutor {
   id: string;
   name: string;
@@ -59,4 +66,26 @@ export interface QuickStat {
   value: number;
   icon: string;
   color: string;
+}
+
+export interface ProcessedSlot extends Slot {
+  id: string;
+  scheduleId: string;
+  day: string;
+  isBooked: boolean;
+}
+
+export interface ScheduleData {
+  id: string;
+  tutorId: User;
+  slots: ProcessedSlot[];
+}
+
+export interface BookingData {
+  id: string;
+  tutor?: { id: string };
+  bookedSlot?: {
+    startTime: FirebaseFirestoreTypes.Timestamp;
+    endTime: FirebaseFirestoreTypes.Timestamp;
+  };
 }

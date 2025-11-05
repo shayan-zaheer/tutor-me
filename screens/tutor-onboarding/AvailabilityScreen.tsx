@@ -41,10 +41,10 @@ const AvailabilityScreen = () => {
 
   const deleteSlot = async (scheduleId: string, slotToDelete: any) => {
     try {
-      const tutorRef = firestore().collection('users').doc(currentUser?.uid);
+      const firestoreTutorReference = firestore().collection('users').doc(currentUser?.uid);
       const snapshot = await firestore()
         .collection('schedules')
-        .where('tutorId', '==', tutorRef)
+        .where('tutorId', '==', firestoreTutorReference)
         .get();
 
       for (const doc of snapshot.docs) {
@@ -73,11 +73,11 @@ const AvailabilityScreen = () => {
   useEffect(() => {
     if (!currentUser?.uid) return;
 
-    const tutorRef = firestore().collection('users').doc(currentUser.uid);
+    const firestoreTutorReference = firestore().collection('users').doc(currentUser.uid);
 
     const unsubscribe = firestore()
       .collection('schedules')
-      .where('tutorId', '==', tutorRef)
+      .where('tutorId', '==', firestoreTutorReference)
       .onSnapshot(snapshot => {
         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
@@ -168,11 +168,11 @@ const AvailabilityScreen = () => {
     startDate.setHours(startHour, startMinute, 0, 0);
     endDate.setHours(endHour, endMinute, 0, 0);
 
-    const tutorRef = firestore().collection('users').doc(currentUser?.uid);
+    const firestoreTutorReference = firestore().collection('users').doc(currentUser?.uid);
 
     const snapshot = await firestore()
       .collection('schedules')
-      .where('tutorId', '==', tutorRef)
+      .where('tutorId', '==', firestoreTutorReference)
       .get();
     const schedules = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
@@ -199,7 +199,7 @@ const AvailabilityScreen = () => {
 
     const existingSchedule = schedules.find(
       (schedule: any) =>
-        schedule.tutorId.isEqual && schedule.tutorId.isEqual(tutorRef),
+        schedule.tutorId.isEqual && schedule.tutorId.isEqual(firestoreTutorReference),
     );
 
     const newSlotData = {
@@ -220,7 +220,7 @@ const AvailabilityScreen = () => {
         .collection('schedules')
         .add({
           slots: [newSlotData],
-          tutorId: tutorRef,
+          tutorId: firestoreTutorReference,
         });
     }
 

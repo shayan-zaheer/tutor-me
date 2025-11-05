@@ -91,10 +91,10 @@ const MyBookingsScreen = () => {
 
     setIsLoading(true);
 
-    const selfRef = firestore().collection('users').doc(currentUser?.uid);
+    const firestoreStudentReference = firestore().collection('users').doc(currentUser?.uid);
     const unsubscribe = firestore()
       .collection('bookings')
-      .where('student', '==', selfRef)
+      .where('student', '==', firestoreStudentReference)
       .onSnapshot(async snapshot => {
         try {
           const populatedBookings = await Promise.all(
@@ -152,7 +152,7 @@ const MyBookingsScreen = () => {
         review: review,
       });
 
-      const tutorRef = firestore().collection("users").doc((selectedBooking.tutor as any).id);
+      const firestoreTutorReference = firestore().collection("users").doc((selectedBooking.tutor as any).id);
       
       const currentRating = (selectedBooking?.tutor as any)?.profile?.rating || 0;
       const currentTotalReviews = (selectedBooking?.tutor as any)?.profile?.totalReviews || 0;
@@ -160,7 +160,7 @@ const MyBookingsScreen = () => {
       const newTotalReviews = currentTotalReviews + 1;
       const newAverageRating = ((currentRating * currentTotalReviews) + rating) / newTotalReviews;
       
-      await tutorRef.update({
+      await firestoreTutorReference.update({
         'profile.rating': newAverageRating,
         'profile.totalReviews': firestore.FieldValue.increment(1),
       });

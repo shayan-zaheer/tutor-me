@@ -76,10 +76,10 @@ const ManageBookingsScreen = () => {
     if (!currentUser?.uid) return;
 
     setIsLoading(true);
-    const tutorRef = firestore().collection('users').doc(currentUser.uid);
+    const firestoreTutorReference = firestore().collection('users').doc(currentUser.uid);
     const unsubscribe = firestore()
       .collection('bookings')
-      .where('tutor', '==', tutorRef)
+      .where('tutor', '==', firestoreTutorReference)
       .onSnapshot(async snapshot => {
         try {
           const books = await Promise.all(

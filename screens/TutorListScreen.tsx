@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,40 +13,37 @@ import {
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { populateReferences } from '../utils/populateReferences';
 import { 
-  formatSlotDate, 
   formatTimeRange, 
-  getCurrentDate,
-  timestampToDate,
-  timestampToMillis
+  timestampToDate
 } from '../utils/dateUtil';
-import { Tutor } from '../types';
+import { useTutorSchedules } from '../hooks/useTutorSchedules';
+import { TutorSchedule, ProcessedSlot } from '../types/index';
 
 const TutorListScreen = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [selectedTutor, setSelectedTutor] = useState<Tutor | null>(null);
+  const [selectedTutor, setSelectedTutor] = useState<TutorSchedule | null>(null);
   const [showBookingModal, setShowBookingModal] = useState(false);
-  const [selectedSlot, setSelectedSlot] = useState<any | null>(null);
-  const [allTutors, setAllTutors] = useState<Tutor[]>([]);
-  const [filteredTutors, setFilteredTutors] = useState<Tutor[]>([]);
+  const [selectedSlot, setSelectedSlot] = useState<ProcessedSlot | null>(null);
+  const [filteredTutors, setFilteredTutors] = useState<TutorSchedule[]>([]);
   const currentUser = auth().currentUser;
-  const debounceTimeout = useRef<any>(null);
+  const debounceTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  const { allTutors, isLoading } = useTutorSchedules(currentUser?.uid);
 
-  const debouncedSearch = useCallback((query: string, tutors: any[]) => {
+  const debouncedSearch = useCallback((query: string) => {
     if (debounceTimeout.current) {
       clearTimeout(debounceTimeout.current);
     }
 
     debounceTimeout.current = setTimeout(() => {
       if (!query.trim()) {
-        setFilteredTutors(tutors);
+        setFilteredTutors(allTutors);
         return;
       }
 
-      const filtered = tutors.filter(tutor => {
-        const tutorData = (tutor as any).tutorId;
+      const filtered = allTutors.filter(tutor => {
+        const tutorData = tutor.tutorId;
         const nameMatch = tutorData?.name
           ?.toLowerCase()
           .includes(query.toLowerCase());
@@ -57,114 +54,18 @@ const TutorListScreen = () => {
       });
       setFilteredTutors(filtered);
     }, 500);
-  }, []);
+  }, [allTutors]);
 
   useEffect(() => {
-    setIsLoading(true);
-    const selfRef = firestore().collection('users').doc(currentUser?.uid);
+    setFilteredTutors(allTutors);
+  }, [allTutors]);
 
-    let latestSchedules: any[] = [];
-    let latestBookings: any[] = [];
+  const handleSearchChange = (query: string) => {
+    setSearchQuery(query);
+    debouncedSearch(query);
+  };
 
-    const processAndSet = (schedulesData: any[], bookingsData: any[]) => {
-      try {
-        const now = getCurrentDate();
-
-        const bookedSlots = new Set<string>();
-        bookingsData.forEach(b => {
-          const booking = b;
-          if (!booking || !booking.bookedSlot) return;
-          const tutorId = booking.tutor?.id;
-          const start =
-            booking.bookedSlot.startTime?.toMillis?.() ??
-            timestampToMillis(booking.bookedSlot.startTime);
-          const end =
-            booking.bookedSlot.endTime?.toMillis?.() ??
-            timestampToMillis(booking.bookedSlot.endTime);
-          if (tutorId && start && end) {
-            bookedSlots.add(`${tutorId}-${start}-${end}`);
-          }
-        });
-
-        const tutorsWithBookingStatus = schedulesData
-          .map((schedule: any) => {
-            const tutorId = schedule.tutorId?.id;
-            const slotsWithStatus = (schedule.slots || [])
-              .filter((slot: any) => timestampToDate(slot.startTime) >= now)
-              .map((slot: any, index: number) => {
-                const startMillis = timestampToMillis(slot.startTime);
-                const endMillis = timestampToMillis(slot.endTime);
-                const slotKey = `${tutorId}-${startMillis}-${endMillis}`;
-                const isBooked = bookedSlots.has(slotKey);
-
-                return {
-                  ...slot,
-                  id: `${schedule.id}-${index}`,
-                  scheduleId: schedule.id,
-                  day: formatSlotDate(slot.startTime),
-                  isBooked,
-                };
-              });
-
-            return { ...schedule, slots: slotsWithStatus };
-          })
-          .filter((s: any) => (s.slots || []).length > 0);
-
-        setAllTutors(tutorsWithBookingStatus);
-        setFilteredTutors(tutorsWithBookingStatus);
-        setIsLoading(false);
-      } catch (err) {
-        console.error('Error in processing schedules/bookings:', err);
-        setIsLoading(false);
-      }
-    };
-
-    const schedulesUnsub = firestore()
-      .collection('schedules')
-      .where('tutorId', '!=', selfRef)
-      .onSnapshot(async schedulesSnapshot => {
-        try {
-          const populated = await Promise.all(
-            schedulesSnapshot.docs.map(async (doc: any) => {
-              const data = doc.data();
-              const populatedData = await populateReferences(data);
-              return { id: doc.id, ...populatedData };
-            }),
-          );
-          latestSchedules = populated;
-          processAndSet(latestSchedules, latestBookings);
-        } catch (err) {
-          console.error('Error populating schedules:', err);
-          setIsLoading(false);
-        }
-      });
-
-    const bookingsUnsub = firestore()
-      .collection('bookings')
-      .onSnapshot(bookingsSnapshot => {
-        try {
-          latestBookings = bookingsSnapshot.docs.map((d: any) => ({
-            id: d.id,
-            ...d.data(),
-          }));
-          processAndSet(latestSchedules, latestBookings);
-        } catch (err) {
-          console.error('Error reading bookings:', err);
-          setIsLoading(false);
-        }
-      });
-
-    return () => {
-      schedulesUnsub();
-      bookingsUnsub();
-    };
-  }, [currentUser?.uid]);
-
-  useEffect(() => {
-    debouncedSearch(searchQuery, allTutors);
-  }, [searchQuery, allTutors, debouncedSearch]);
-
-  const handleBookSlot = (tutor: Tutor, slot: any) => {
+  const handleBookSlot = (tutor: TutorSchedule, slot: ProcessedSlot) => {
     if (slot.isBooked) {
       Alert.alert(
         'Slot Unavailable',
@@ -182,13 +83,13 @@ const TutorListScreen = () => {
     if (!selectedTutor || !selectedSlot || !currentUser) return;
 
     try {
-      const tutorId = (selectedTutor as any).tutorId?.id || selectedTutor.id;
-      const tutorRef = firestore().collection('users').doc(tutorId);
-      const selfRef = firestore().collection('users').doc(currentUser.uid);
+      const tutorId = selectedTutor.tutorId.id;
+      const firestoreTutorReference = firestore().collection('users').doc(tutorId);
+      const firestoreStudentReference = firestore().collection('users').doc(currentUser.uid);
 
       const studentBookingsSnapshot = await firestore()
         .collection('bookings')
-        .where('student', '==', selfRef)
+        .where('student', '==', firestoreStudentReference)
         .get();
 
       const hasTimeConflict = studentBookingsSnapshot.docs.some(doc => {
@@ -218,7 +119,7 @@ const TutorListScreen = () => {
 
       const studentSchedulesSnapshot = await firestore()
         .collection('schedules')
-        .where('tutorId', '==', selfRef)
+        .where('tutorId', '==', firestoreStudentReference)
         .get();
 
       const hasTeachingConflict = studentSchedulesSnapshot.docs.some(doc => {
@@ -253,8 +154,8 @@ const TutorListScreen = () => {
         .doc(selectedSlot.scheduleId);
 
       const bookingData = {
-        tutor: tutorRef,
-        student: selfRef,
+        tutor: firestoreTutorReference,
+        student: firestoreStudentReference,
         schedule: scheduleRef,
         bookedSlot: {
           startTime: selectedSlot.startTime,
@@ -273,11 +174,7 @@ const TutorListScreen = () => {
 
       Alert.alert(
         'Booking Confirmed!',
-        `Your session with ${
-          (selectedTutor as any).tutorId?.name || 'the tutor'
-        } on ${selectedSlot.day} has been booked. His contact number is ${
-          (selectedTutor as any)?.tutorId?.contact
-        }. Copy it because due to privacy policies, you won't be able to see it again.`,
+        `Your session with ${selectedTutor.tutorId.name || 'the tutor'} on ${selectedSlot.day} has been booked.`,
         [{ text: 'OK' }],
       );
 
@@ -319,7 +216,7 @@ const TutorListScreen = () => {
     return stars;
   };
 
-  const renderTutorCard = ({ item: tutor }: { item: any }) => (
+  const renderTutorCard = ({ item: tutor }: { item: TutorSchedule }) => (
     <View className="bg-white mx-4 mb-4 rounded-xl shadow-lg">
       <View className="p-4">
         <View className="flex-row items-center mb-3">
@@ -329,16 +226,16 @@ const TutorListScreen = () => {
             </Text>
             <View className="flex-row items-center mt-1">
               <View className="flex-row items-center mr-3">
-                {renderStars(tutor.tutorId.profile.rating)}
+                {renderStars(tutor.tutorId.profile?.rating || 0)}
                 <Text className="ml-2 text-gray-600">
-                  {tutor.tutorId.profile.rating}
+                  {tutor.tutorId.profile?.rating || 0}
                 </Text>
               </View>
             </View>
           </View>
         </View>
 
-        <Text className="text-gray-700 mb-3">{tutor.tutorId.profile.bio}</Text>
+        <Text className="text-gray-700 mb-3">{tutor.tutorId.profile?.bio || 'No bio available'}</Text>
 
         <View className="border-t border-gray-200 pt-4">
           <Text className="text-lg font-semibold text-gray-800 mb-3">
@@ -346,7 +243,7 @@ const TutorListScreen = () => {
           </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View className="flex-row">
-              {tutor.slots.map((slot: any) => (
+              {tutor.slots.map((slot: ProcessedSlot) => (
                 <TouchableOpacity
                   key={slot.id}
                   className={`mr-3 p-3 rounded-lg min-w-[120px] ${
@@ -390,7 +287,7 @@ const TutorListScreen = () => {
             placeholder="Search tutors or subjects..."
             placeholderTextColor={'#666'}
             value={searchQuery}
-            onChangeText={setSearchQuery}
+            onChangeText={handleSearchChange}
             className="flex-1 ml-2 text-gray-800"
           />
         </View>
@@ -421,7 +318,7 @@ const TutorListScreen = () => {
               <View>
                 <Text className="text-gray-700 text-center mb-2">
                   Book a session with{' '}
-                  {(selectedTutor as any).tutorId?.name || 'the tutor'}?
+                  {selectedTutor.tutorId.name || 'the tutor'}?
                 </Text>
                 <Text className="font-semibold text-center mb-4">
                   {selectedSlot.day} at {formatTimeRange(selectedSlot.startTime, selectedSlot.endTime)}
