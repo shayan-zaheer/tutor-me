@@ -5,6 +5,7 @@ export interface Profile {
   speciality: string;
   rating: number;
   totalReviews: number;
+  hourlyRate: number;
 }
 
 export interface TutorSchedule {
@@ -31,6 +32,9 @@ export interface Schedule {
 export interface Slot {
   startTime: FirebaseFirestoreTypes.Timestamp;
   endTime: FirebaseFirestoreTypes.Timestamp;
+}
+
+export interface BookedSlot extends Slot {
   price: number;
 }
 
@@ -39,7 +43,7 @@ export interface Booking {
   tutor: User | FirebaseFirestoreTypes.DocumentReference;
   student: User | FirebaseFirestoreTypes.DocumentReference;
   schedule: Schedule | FirebaseFirestoreTypes.DocumentReference;
-  bookedSlot: Slot;
+  bookedSlot: BookedSlot;
   ratings?: number;
   rating?: number;
   isPaid: boolean;

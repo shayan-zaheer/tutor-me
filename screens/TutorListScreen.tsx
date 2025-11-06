@@ -15,10 +15,11 @@ import auth from '@react-native-firebase/auth';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { 
   formatTimeRange, 
-  timestampToDate
+  timestampToDate,
+  calculateSlotPrice
 } from '../utils/dateUtil';
 import { useTutorSchedules } from '../hooks/useTutorSchedules';
-import { TutorSchedule, ProcessedSlot } from '../types/index';
+import { ScheduleData as TutorSchedule, ProcessedSlot } from '../types/index';
 
 const TutorListScreen = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -160,7 +161,7 @@ const TutorListScreen = () => {
         bookedSlot: {
           startTime: selectedSlot.startTime,
           endTime: selectedSlot.endTime,
-          price: selectedSlot.price,
+          price: calculateSlotPrice(selectedSlot.startTime, selectedSlot.endTime, selectedTutor.tutorId.profile?.hourlyRate || 0),
         },
         ratings: 0,
         isPaid: true,
@@ -262,7 +263,7 @@ const TutorListScreen = () => {
                   </Text>
 
                   <Text className="text-center text-teal-600 font-semibold">
-                    ${slot.price}
+                    ${calculateSlotPrice(slot.startTime, slot.endTime, tutor.tutorId.profile?.hourlyRate || 0)}
                   </Text>
                   {slot.isBooked && (
                     <Text className="text-center text-red-600 text-xs mt-1">
@@ -324,7 +325,7 @@ const TutorListScreen = () => {
                   {selectedSlot.day} at {formatTimeRange(selectedSlot.startTime, selectedSlot.endTime)}
                 </Text>
                 <Text className="text-center text-lg font-bold text-teal-600 mb-6">
-                  Total: ${selectedSlot.price}
+                  Total: ${calculateSlotPrice(selectedSlot.startTime, selectedSlot.endTime, selectedTutor.tutorId.profile?.hourlyRate || 0)}
                 </Text>
               </View>
             )}

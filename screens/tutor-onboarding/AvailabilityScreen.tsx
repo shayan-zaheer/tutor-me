@@ -4,7 +4,6 @@ import {
   Modal,
   ScrollView,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -29,12 +28,10 @@ const AvailabilityScreen = () => {
     day: DayOfWeek;
     startTime: string;
     endTime: string;
-    price: string;
   }>({
     day: DAYS_OF_WEEK[0],
     startTime: '',
     endTime: '',
-    price: '',
   });
   const [slots, setSlots] = useState<Array<any>>([]);
   const currentUser = auth().currentUser;
@@ -62,6 +59,7 @@ const AvailabilityScreen = () => {
           await firestore().collection('schedules').doc(doc.id).update({
             slots: updatedSlots,
           });
+          // The onSnapshot listener will automatically update the state
           return;
         }
       }
@@ -155,7 +153,7 @@ const AvailabilityScreen = () => {
   ];
 
   const handleAddSlot = async () => {
-    if (!newSlot.startTime || !newSlot.endTime || !newSlot.price) return;
+    if (!newSlot.startTime || !newSlot.endTime) return;
 
     const targetDate = getDateOccurrence(newSlot.day);
 
@@ -205,7 +203,6 @@ const AvailabilityScreen = () => {
     const newSlotData = {
       startTime: firestore.Timestamp.fromDate(startDate),
       endTime: firestore.Timestamp.fromDate(endDate),
-      price: +newSlot.price,
     };
 
     if (existingSchedule) {
@@ -230,7 +227,6 @@ const AvailabilityScreen = () => {
       day: DAYS_OF_WEEK[0],
       startTime: '',
       endTime: '',
-      price: '',
     });
   };
 
@@ -366,18 +362,6 @@ const AvailabilityScreen = () => {
                   ))}
                 </View>
               </ScrollView>
-            </View>
-
-            <View className="mb-6">
-              <Text className="font-semibold mb-2">Price (PKR)</Text>
-              <TextInput
-                className="border border-gray-300 rounded-lg p-3 text-black"
-                placeholder="e.g., 30"
-                placeholderTextColor="#666"
-                value={newSlot.price}
-                onChangeText={text => setNewSlot({ ...newSlot, price: text })}
-                keyboardType="numeric"
-              />
             </View>
 
             <Text className="text-center font-semibold mb-4">
