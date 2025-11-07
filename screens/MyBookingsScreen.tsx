@@ -9,17 +9,16 @@ import {
   TextInput,
   ActivityIndicator,
 } from 'react-native';
-import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { Booking } from '../types';
-import { populateReferences } from '../utils/populateReferences';
 import { 
   formatBookingCardDisplay, 
   getCurrentDate, 
   timestampToDate,
   sortBookingsByDate
 } from '../utils/dateUtil';
+import { bookingService } from '../services/bookingService';
 
 const BookingSections = ({ bookings, renderBookingCard, selectedTab }: { 
   bookings: Booking[], 
@@ -91,33 +90,22 @@ const MyBookingsScreen = () => {
 
     setIsLoading(true);
 
-    const firestoreStudentReference = firestore().collection('users').doc(currentUser?.uid);
-    const unsubscribe = firestore()
-      .collection('bookings')
-      .where('student', '==', firestoreStudentReference)
-      .onSnapshot(async snapshot => {
-        try {
-          const populatedBookings = await Promise.all(
-            snapshot.docs.map(async doc => {
-              const populated = await populateReferences(doc.data());
-              return { id: doc.id, ...populated };
-            }),
-          );
-          setBookings(populatedBookings);
-          console.log('Populated Bookings:', populatedBookings);
-          setIsLoading(false);
-        } catch (err) {
-          console.error('Error populating booking references:', err);
-          setIsLoading(false);
-        }
+    bookingService.getStudentBookings(currentUser.uid)
+      .then((populatedBookings: any) => {
+        setBookings(populatedBookings);
+        console.log('Populated Bookings:', populatedBookings);
+        setIsLoading(false);
+      })
+      .catch((err) => {
+        console.error('Error loading bookings:', err);
+        setIsLoading(false);
       });
 
-    return () => unsubscribe();
   }, [currentUser]);
 
   const deleteBooking = async (bookingId: string) => {
     try {
-      await firestore().collection('bookings').doc(bookingId).delete();
+      await bookingService.deleteBooking(bookingId);
       setBookings(bookings.filter(b => b.id !== bookingId));
       Alert.alert('Success', 'Booking deleted successfully');
       setShowDeleteModal(false);
@@ -147,38 +135,28 @@ const MyBookingsScreen = () => {
     }
 
     try {
-      await firestore().collection('bookings').doc(selectedBooking.id).update({
-        ratings: rating,
-        review: review,
-      });
+      await bookingService.submitRating(
+        selectedBooking.id,
+        rating,
+        review,
+        (selectedBooking.tutor as any).id
+      );
 
-      const firestoreTutorReference = firestore().collection("users").doc((selectedBooking.tutor as any).id);
-      
-      const currentRating = (selectedBooking?.tutor as any)?.profile?.rating || 0;
-      const currentTotalReviews = (selectedBooking?.tutor as any)?.profile?.totalReviews || 0;
+      const updatedBookings = bookings.map(b =>
+        b.id === selectedBooking.id ? { ...b, rating, review } : b,
+      );
 
-      const newTotalReviews = currentTotalReviews + 1;
-      const newAverageRating = ((currentRating * currentTotalReviews) + rating) / newTotalReviews;
-      
-      await firestoreTutorReference.update({
-        'profile.rating': newAverageRating,
-        'profile.totalReviews': firestore.FieldValue.increment(1),
-      });
+      setBookings(updatedBookings);
+      setShowRatingModal(false);
+      setSelectedBooking(null);
+      setRating(0);
+      setReview('');
+
+      Alert.alert('Thank You!', 'Your rating has been submitted successfully.');
     } catch (error) {
       console.error('Error updating booking:', error);
+      Alert.alert('Error', 'Failed to submit rating');
     }
-
-    const updatedBookings = bookings.map(b =>
-      b.id === selectedBooking.id ? { ...b, rating, review } : b,
-    );
-
-    setBookings(updatedBookings);
-    setShowRatingModal(false);
-    setSelectedBooking(null);
-    setRating(0);
-    setReview('');
-
-    Alert.alert('Thank You!', 'Your rating has been submitted successfully.');
   };
 
   const renderStars = (currentRating: number, interactive = false) => {

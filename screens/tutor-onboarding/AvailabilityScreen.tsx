@@ -9,11 +9,8 @@ import {
 } from 'react-native';
 import { useEffect, useState } from 'react';
 import Icon from 'react-native-vector-icons/Ionicons';
-import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import 'react-native-get-random-values';
-import { v4 as uuidv4 } from 'uuid';
-import { getDateOccurrence } from '../../utils/getDateOccurrence';
 import { DAYS_OF_WEEK, DayOfWeek } from '../../constants/days';
 import { 
   formatTimeRange, 
@@ -21,6 +18,16 @@ import {
   getCurrentDate,
   formatDayName 
 } from '../../utils/dateUtil';
+import { getDateOccurrence } from '../../utils/getDateOccurrence';
+import { scheduleService } from '../../services/scheduleService';
+import { v4 as uuidv4 } from 'uuid';
+
+interface SlotWithId {
+  id: string;
+  startTime: any;
+  endTime: any;
+  scheduleDocId: string;
+}
 
 const AvailabilityScreen = () => {
   const [showModal, setModal] = useState<boolean>(false);
@@ -34,35 +41,18 @@ const AvailabilityScreen = () => {
     endTime: '',
   });
   const [slots, setSlots] = useState<Array<any>>([]);
+  const [slotsWithMetadata, setSlotsWithMetadata] = useState<SlotWithId[]>([]);
   const currentUser = auth().currentUser;
 
-  const deleteSlot = async (scheduleId: string, slotToDelete: any) => {
+  const deleteSlot = async (slotId: string) => {
     try {
-      const firestoreTutorReference = firestore().collection('users').doc(currentUser?.uid);
-      const snapshot = await firestore()
-        .collection('schedules')
-        .where('tutorId', '==', firestoreTutorReference)
-        .get();
-
-      for (const doc of snapshot.docs) {
-        const schedule = doc.data();
-        const receivedSlots = schedule.slots || [];
-
-        const updatedSlots = receivedSlots.filter((slot: any) => {
-          const time = formatTimeRange(slot.startTime, slot.endTime);
-          const day = formatDayName(slot.startTime, 'long');
-
-          return !(time === slotToDelete.time && day === slotToDelete.day);
-        });
-
-        if (updatedSlots.length !== receivedSlots.length) {
-          await firestore().collection('schedules').doc(doc.id).update({
-            slots: updatedSlots,
-          });
-          // The onSnapshot listener will automatically update the state
-          return;
-        }
+      const slotToDelete = slotsWithMetadata.find(slot => slot.id === slotId);
+      if (!slotToDelete) {
+        console.error('Slot not found');
+        return;
       }
+
+      await scheduleService.deleteTimeSlot(slotId, slotToDelete.scheduleDocId);
     } catch (error) {
       console.error('Error deleting slot:', error);
     }
@@ -71,31 +61,41 @@ const AvailabilityScreen = () => {
   useEffect(() => {
     if (!currentUser?.uid) return;
 
-    const firestoreTutorReference = firestore().collection('users').doc(currentUser.uid);
-
-    const unsubscribe = firestore()
-      .collection('schedules')
-      .where('tutorId', '==', firestoreTutorReference)
-      .onSnapshot(snapshot => {
-        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
+    const unsubscribe = scheduleService.getTutorSchedulesRealTime(
+      currentUser.uid,
+      (data) => {
         const now = getCurrentDate();
+        const slotsMetadata: SlotWithId[] = [];
+        
         const refined = data.flatMap((schedule: any) =>
           schedule.slots?.filter((slot: any) => {
             return timestampToDate(slot.startTime) >= now;
-          }).map((slot: any) => ({
-            id: uuidv4(),
-            time: formatTimeRange(slot.startTime, slot.endTime),
-            day: formatDayName(slot.startTime, 'long'),
-            difference: `${
-              +timestampToDate(slot.endTime).getHours() -
-              +timestampToDate(slot.startTime).getHours()
-            } hours`,
-          })),
+          }).map((slot: any) => {
+            const slotId = slot.id || uuidv4();
+            
+            slotsMetadata.push({
+              id: slotId,
+              startTime: slot.startTime,
+              endTime: slot.endTime,
+              scheduleDocId: schedule.id,
+            });
+
+            return {
+              id: slotId,
+              time: formatTimeRange(slot.startTime, slot.endTime),
+              day: formatDayName(slot.startTime, 'long'),
+              difference: `${
+                +timestampToDate(slot.endTime).getHours() -
+                +timestampToDate(slot.startTime).getHours()
+              } hours`,
+            };
+          }),
         );
 
+        setSlotsWithMetadata(slotsMetadata);
         setSlots(refined);
-      });
+      }
+    );
 
     return () => unsubscribe();
   }, [currentUser?.uid]);
@@ -111,7 +111,7 @@ const AvailabilityScreen = () => {
           <Text className="text-gray-400">{item.difference}</Text>
         </View>
       </View>
-      <TouchableOpacity onPress={() => deleteSlot(item.id, item)}>
+      <TouchableOpacity onPress={() => deleteSlot(item.id)}>
         <Icon name="trash" size={20} color="#000" />
       </TouchableOpacity>
     </View>
@@ -153,81 +153,27 @@ const AvailabilityScreen = () => {
   ];
 
   const handleAddSlot = async () => {
-    if (!newSlot.startTime || !newSlot.endTime) return;
+    if (!newSlot.startTime || !newSlot.endTime || !currentUser?.uid) return;
 
-    const targetDate = getDateOccurrence(newSlot.day);
+    try {
+      await scheduleService.addTimeSlot(currentUser.uid, {
+        day: newSlot.day,
+        startTime: newSlot.startTime,
+        endTime: newSlot.endTime,
+      });
 
-    const startDate = new Date(targetDate);
-    const endDate = new Date(targetDate);
-
-    const [startHour, startMinute] = newSlot.startTime.split(':').map(Number);
-    const [endHour, endMinute] = newSlot.endTime.split(':').map(Number);
-
-    startDate.setHours(startHour, startMinute, 0, 0);
-    endDate.setHours(endHour, endMinute, 0, 0);
-
-    const firestoreTutorReference = firestore().collection('users').doc(currentUser?.uid);
-
-    const snapshot = await firestore()
-      .collection('schedules')
-      .where('tutorId', '==', firestoreTutorReference)
-      .get();
-    const schedules = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-    const hasConflict = schedules.some((schedule: any) =>
-      schedule.slots?.some((slot: any) => {
-        const existingStart = timestampToDate(slot.startTime);
-        const existingEnd = timestampToDate(slot.endTime);
-
-        return (
-          (startDate >= existingStart && startDate < existingEnd) ||
-          (endDate > existingStart && endDate <= existingEnd) ||
-          (startDate <= existingStart && endDate >= existingEnd)
-        );
-      }),
-    );
-
-    if (hasConflict) {
+      setModal(false);
+      setNewSlot({
+        day: DAYS_OF_WEEK[0],
+        startTime: '',
+        endTime: '',
+      });
+    } catch (error) {
       Alert.alert(
-        'Time Conflict',
-        'This time slot overlaps with an existing schedule.',
+        'Error',
+        error instanceof Error ? error.message : 'Failed to add time slot',
       );
-      return;
     }
-
-    const existingSchedule = schedules.find(
-      (schedule: any) =>
-        schedule.tutorId.isEqual && schedule.tutorId.isEqual(firestoreTutorReference),
-    );
-
-    const newSlotData = {
-      startTime: firestore.Timestamp.fromDate(startDate),
-      endTime: firestore.Timestamp.fromDate(endDate),
-    };
-
-    if (existingSchedule) {
-      await firestore()
-        .collection('schedules')
-        .doc(existingSchedule.id)
-        .update({
-          slots: firestore.FieldValue.arrayUnion(newSlotData),
-        });
-    } else {
-      await firestore()
-        .collection('schedules')
-        .add({
-          slots: [newSlotData],
-          tutorId: firestoreTutorReference,
-        });
-    }
-
-    setModal(false);
-
-    setNewSlot({
-      day: DAYS_OF_WEEK[0],
-      startTime: '',
-      endTime: '',
-    });
   };
 
   return (

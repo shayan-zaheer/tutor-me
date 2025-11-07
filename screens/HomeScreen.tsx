@@ -7,10 +7,10 @@ import {
   FlatList,
   Modal,
 } from 'react-native';
-import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { Tutor, Profile, QuickStat } from '../types';
+import { Tutor, QuickStat } from '../types';
+import { userService } from '../services/userService';
 
 const HomeScreen = ({ navigation }: any) => {
   const [logoutModal, setLogoutModal] = useState(false);
@@ -38,70 +38,23 @@ const HomeScreen = ({ navigation }: any) => {
   const currentUser = auth().currentUser;
 
   useEffect(() => {
-    const unsubscribe = firestore()
-      .collection('users')
-      .where('profile', '!=', null)
-      .onSnapshot(snapshot => {
-        const data: Tutor[] = snapshot.docs
-          .map(doc => {
-            const docData = doc.data() as Partial<Tutor>;
-        
-            const profile: Profile = {
-              bio: (docData?.profile as Profile)?.bio ?? '',
-              speciality: (docData?.profile as Profile)?.speciality ?? '',
-              rating: (docData?.profile as Profile)?.rating ?? 0,
-              totalReviews: (docData?.profile as Profile)?.totalReviews ?? 0,
-            };
-
-            return {
-              id: doc.id,
-              name: docData?.name ?? 'Unknown',
-              profile,
-              createdAt: (docData as any)?.createdAt,
-              updatedAt: (docData as any)?.updatedAt,
-            } as Tutor;
-          });
+    userService.getAllTutors()
+      .then((data: any) => {
         setTutors(data);
+      })
+      .catch((error) => {
+        console.error('Error loading tutors:', error);
       });
-
-    return () => {
-      unsubscribe();
-    };
   }, []);
 
   useEffect(() => {
-    const unsubscribe = firestore()
-      .collection('users')
-      .where("profile", "!=", null)
-      .onSnapshot(snapshot =>
-        setQuickStats(previous => {
-          const updated = [...previous];
-          const subjectsSet = new Set();
-
-          snapshot.docs.forEach(doc => {
-            const data = doc.data();
-            updated[0].value = snapshot.size;
-
-            const speciality = data?.profile?.speciality || '';
-            subjectsSet.add(speciality);
-            updated[1].value = subjectsSet.size;
-
-            const totalRating = snapshot.docs.reduce((sum, d) => {
-              const rating = d.data()?.profile?.rating || 0;
-              return sum + rating;
-            }, 0);
-            updated[2].value =
-              snapshot.size > 0
-                ? parseFloat((totalRating / snapshot.size).toFixed(1))
-                : 0;
-          });
-          return updated;
-        }),
-      );
-
-    return () => {
-      unsubscribe();
-    };
+    userService.getTutorStats()
+      .then((stats: any) => {
+        setQuickStats(stats);
+      })
+      .catch((error) => {
+        console.error('Error loading tutor stats:', error);
+      });
   }, []);
 
   const handleSignOut = () => {

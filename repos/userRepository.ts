@@ -68,4 +68,18 @@ const createUserWithEmailAndPasswordRepository = async (email: string, password:
     return userCredential;
 }
 
-export { normalSignInRepository, googleSignInRepository, createUserWithEmailAndPasswordRepository };
+const getUserById = async (userId: string) => {
+    return await firestore().collection('users').doc(userId).get();
+}
+
+const updateUserProfile = async (userId: string, updates: any) => {
+    return await firestore().collection('users').doc(userId).update(updates);
+}
+
+export const userRepository = {
+    normalSignIn: normalSignInRepository,
+    googleSignIn: googleSignInRepository,
+    createUserWithEmailAndPassword: createUserWithEmailAndPasswordRepository,
+    getUserById,
+    updateUserProfile,
+};

@@ -1,7 +1,8 @@
 import { Alert } from 'react-native';
 import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import { testLoginFields } from '../validation/userValidation';
-import { normalSignInRepository, googleSignInRepository, createUserWithEmailAndPasswordRepository } from '../repos/userRepository';
+import { userRepository } from '../repos/userRepository';
 
 const signInWithEmailAndPasswordService = async (email: string, password: string, setIsLocalLoading: (loading: boolean) => void) => {
     if (!testLoginFields(email, password)) {
@@ -12,7 +13,7 @@ const signInWithEmailAndPasswordService = async (email: string, password: string
     setIsLocalLoading(true);
 
     try {
-      await normalSignInRepository(email, password);
+      await userRepository.normalSignIn(email, password);
     } catch (error: any) {
       console.error('Authentication error:', error);
       Alert.alert('Error', error.message || 'Authentication failed');
@@ -24,7 +25,7 @@ const signInWithEmailAndPasswordService = async (email: string, password: string
 const signInWithGoogleService = async (setIsGoogleLoading: (loading: boolean) => void) => {
     try {
       setIsGoogleLoading(true);
-      await googleSignInRepository();
+      await userRepository.googleSignIn();
     } catch (error: any) {
       Alert.alert('Google Sign-Up Error', error.message || 'Google Sign-Up failed');
     } finally {
@@ -68,7 +69,7 @@ const signUpWithEmailAndPasswordService = async (
     setIsLocalLoading(true);
 
     try {
-        await createUserWithEmailAndPasswordRepository(email, password, fullName);
+        await userRepository.createUserWithEmailAndPassword(email, password, fullName);
     } catch (error: any) {
         Alert.alert('SignUp Error', error.message || 'Account creation failed');
     } finally {
@@ -79,7 +80,7 @@ const signUpWithEmailAndPasswordService = async (
 const signUpWithGoogleService = async (setIsGoogleLoading: (loading: boolean) => void) => {
     try {
       setIsGoogleLoading(true);
-      await googleSignInRepository();
+      await userRepository.googleSignIn();
     } catch (error: any) {
       Alert.alert('Google Sign-Up Error', error.message || 'Google Sign-Up failed');
     } finally {
@@ -91,10 +92,121 @@ const getAuthService = () => {
     return auth();
 };
 
-export { 
-    signInWithEmailAndPasswordService, 
-    signInWithGoogleService, 
-    signUpWithEmailAndPasswordService,
-    signUpWithGoogleService,
-    getAuthService 
+const updateUserContactInfo = async (userId: string, contact: string) => {
+    try {
+        await userRepository.updateUserProfile(userId, { contact });
+    } catch (error) {
+        console.error('Error updating contact info:', error);
+        throw error;
+    }
+};
+
+const getUserProfile = async (userId: string) => {
+    try {
+        const userDoc = await userRepository.getUserById(userId);
+        return userDoc.exists() ? userDoc.data() : null;
+    } catch (error) {
+        console.error('Error getting user profile:', error);
+        throw error;
+    }
+};
+
+const getAllTutors = () => {
+    return new Promise((resolve, reject) => {
+        const unsubscribe = firestore()
+            .collection('users')
+            .where('profile', '!=', null)
+            .onSnapshot(
+                (snapshot) => {
+                    const data = snapshot.docs.map(doc => {
+                        const docData = doc.data();
+                        const profile = {
+                            bio: docData?.profile?.bio ?? '',
+                            speciality: docData?.profile?.speciality ?? '',
+                            rating: docData?.profile?.rating ?? 0,
+                            totalReviews: docData?.profile?.totalReviews ?? 0,
+                            hourlyRate: docData?.profile?.hourlyRate ?? 0,
+                        };
+
+                        return {
+                            id: doc.id,
+                            name: docData?.name ?? 'Unknown',
+                            profile,
+                            createdAt: docData?.createdAt,
+                            updatedAt: docData?.updatedAt,
+                        };
+                    });
+                    resolve(data);
+                },
+                reject
+            );
+        return unsubscribe;
+    });
+};
+
+const getTutorStats = () => {
+    return new Promise((resolve, reject) => {
+        const unsubscribe = firestore()
+            .collection('users')
+            .where('profile', '!=', null)
+            .onSnapshot(
+                (snapshot) => {
+                    const subjectsSet = new Set();
+                    let totalRating = 0;
+
+                    snapshot.docs.forEach(doc => {
+                        const data = doc.data();
+                        const speciality = data?.profile?.speciality || '';
+                        subjectsSet.add(speciality);
+                        totalRating += data?.profile?.rating || 0;
+                    });
+
+                    const stats = [
+                        {
+                            title: 'Total Tutors',
+                            value: snapshot.size,
+                            icon: 'people',
+                            color: 'bg-blue-500',
+                        },
+                        {
+                            title: 'Subjects',
+                            value: subjectsSet.size,
+                            icon: 'book',
+                            color: 'bg-green-500',
+                        },
+                        {
+                            title: 'Average Rating',
+                            value: snapshot.size > 0 ? parseFloat((totalRating / snapshot.size).toFixed(1)) : 0,
+                            icon: 'star',
+                            color: 'bg-yellow-500',
+                        },
+                    ];
+                    resolve(stats);
+                },
+                reject
+            );
+        return unsubscribe;
+    });
+};
+
+const updateUserProfileService = async (userId: string, updates: any) => {
+    try {
+        await userRepository.updateUserProfile(userId, updates);
+    } catch (error) {
+        console.error('Error updating user profile:', error);
+        throw error;
+    }
+};
+
+export const userService = {
+    signInWithEmailAndPassword: signInWithEmailAndPasswordService,
+    signInWithGoogle: signInWithGoogleService,
+    signUpWithEmailAndPassword: signUpWithEmailAndPasswordService,
+    signUpWithGoogle: signUpWithGoogleService,
+    getAuth: getAuthService,
+    updateUserContactInfo,
+    updateUserProfile: updateUserProfileService,
+    getUserProfile,
+    getAllTutors,
+    getTutorStats,
 };

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Alert, Modal, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { userService } from '../../services/userService';
 import SelectDropdown from 'react-native-select-dropdown';
 
 const ReviewProfileScreen = () => {
@@ -21,33 +21,31 @@ const ReviewProfileScreen = () => {
   useEffect(() => {
     if (!currentUser?.uid) return;
 
-    const unsubscribe = firestore()
-      .collection('users')
-      .doc(currentUser.uid)
-      .onSnapshot(doc => {
-        if (doc.exists()) {
-          const profile = doc.data();
+    const loadUserProfile = async () => {
+      try {
+        const profile = await userService.getUserProfile(currentUser.uid);
+        if (profile) {
           setUser(profile);
           setSelectedSpeciality(profile?.profile?.speciality || 'Select your speciality');
         }
-      });
+      } catch (error) {
+        console.error('Error loading user profile:', error);
+      }
+    };
 
-    return () => unsubscribe();
+    loadUserProfile();
   }, [currentUser?.uid]);
 
   const handleProfileSave = async () => {
     if (currentUser?.uid && user) {
       try {
-        await firestore()
-          .collection('users')
-          .doc(currentUser.uid)
-          .update({
-            name: user.name,
-            profile: {
-              ...user.profile,
-              bio: user.profile?.bio,
-            },
-          });
+        await userService.updateUserProfile(currentUser.uid, {
+          name: user.name,
+          profile: {
+            ...user.profile,
+            bio: user.profile?.bio,
+          },
+        });
       } catch (err) {
         console.error('Error in saving profile:', err);
       } finally {
@@ -64,15 +62,12 @@ const ReviewProfileScreen = () => {
 
     try {
       if (currentUser?.uid && user) {
-        await firestore()
-          .collection('users')
-          .doc(currentUser?.uid)
-          .update({
-            profile: {
-              ...user.profile,
-              speciality: selectedSpeciality,
-            },
-          });
+        await userService.updateUserProfile(currentUser.uid, {
+          profile: {
+            ...user.profile,
+            speciality: selectedSpeciality,
+          },
+        });
       }
     } catch (err) {
       console.error('Error in saving speciality:', err);

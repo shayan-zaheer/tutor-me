@@ -8,10 +8,8 @@ import {
   Modal,
 } from 'react-native';
 import { useState, useEffect } from 'react';
-import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { populateReferences } from '../../utils/populateReferences';
 import { 
   formatBookingCardDisplay, 
   timestampToMillis,
@@ -19,6 +17,7 @@ import {
   getCurrentDate,
   isWithinTimeThreshold
 } from '../../utils/dateUtil';
+import { bookingService } from '../../services/bookingService';
 
 const ManageBookingsScreen = () => {
   const [selectedTab, setSelectedTab] = useState<
@@ -47,7 +46,7 @@ const ManageBookingsScreen = () => {
 
   const deleteBooking = async (bookingId: string) => {
     try {
-      await firestore().collection('bookings').doc(bookingId).delete();
+      await bookingService.deleteBooking(bookingId);
       setUpcomingBookings(prev => prev.filter(booking => booking.id !== bookingId));
       Alert.alert('Success', 'Booking deleted successfully');
       setShowDeleteModal(false);
@@ -60,9 +59,7 @@ const ManageBookingsScreen = () => {
 
   const markBookingComplete = async (bookingId: string) => {
     try {
-      await firestore().collection('bookings').doc(bookingId).update({
-        status: 'completed'
-      });
+      await bookingService.markBookingComplete(bookingId);
       Alert.alert('Success', 'Booking marked as completed');
       setShowMarkCompleteModal(false);
       setSelectedBooking(null);
@@ -76,44 +73,31 @@ const ManageBookingsScreen = () => {
     if (!currentUser?.uid) return;
 
     setIsLoading(true);
-    const firestoreTutorReference = firestore().collection('users').doc(currentUser.uid);
-    const unsubscribe = firestore()
-      .collection('bookings')
-      .where('tutor', '==', firestoreTutorReference)
-      .onSnapshot(async snapshot => {
-        try {
-          const books = await Promise.all(
-            snapshot.docs.map(async doc => {
-              const populated = await populateReferences(doc.data());
-              return { id: doc.id, ...populated };
-            }),
-          );
 
-          const upcoming: any = [];
-          const completed: any = [];
+    bookingService.getTutorBookings(currentUser.uid)
+      .then((books: any) => {
+        const upcoming: any = [];
+        const completed: any = [];
 
-          books.forEach(booking => {
-            // Default status to 'booked' if not set
-            const status = booking.status || 'booked';
-            
-            if (status === 'completed') {
-              completed.push(booking);
-            } else {
-              // All non-completed bookings are considered upcoming
-              upcoming.push(booking);
-            }
-          });
+        books.forEach((booking: any) => {
+          const status = booking.status || 'booked';
+          
+          if (status === 'completed') {
+            completed.push(booking);
+          } else {
+            upcoming.push(booking);
+          }
+        });
 
-          setUpcomingBookings(sortBookingsByDate(upcoming));
-          setCompletedBookings(sortBookingsByDate(completed));
-        } catch (error) {
-          console.error('Error populating bookings:', error);
-        } finally {
-          setIsLoading(false);
-        }
+        setUpcomingBookings(sortBookingsByDate(upcoming));
+        setCompletedBookings(sortBookingsByDate(completed));
+        setIsLoading(false);
+      })
+      .catch((error) => {
+        console.error('Error loading tutor bookings:', error);
+        setIsLoading(false);
       });
 
-    return () => unsubscribe();
   }, [currentUser?.uid]);
 
   const renderBookingItem = ({ item: booking }: { item: any }) => {

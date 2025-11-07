@@ -8,8 +8,9 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { useState } from 'react';
-import { signUpWithEmailAndPasswordService, signUpWithGoogleService } from '../../services/userService';
+import { userService } from '../../services/userService';
 import AuthInput from '../../components/AuthInput';
+const googleIcon = require('../../assets/google-logo.png');
 
 const SignUpScreen = ({ navigation }: any) => {
   const [fullName, setFullName] = useState('');
@@ -20,7 +21,7 @@ const SignUpScreen = ({ navigation }: any) => {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const handleSignUp = async () => {
-    await signUpWithEmailAndPasswordService(
+    await userService.signUpWithEmailAndPassword(
       email,
       password,
       confirmPassword,
@@ -30,7 +31,7 @@ const SignUpScreen = ({ navigation }: any) => {
   };
 
   const handleGoogleSignUp = async () => {
-    await signUpWithGoogleService(setIsGoogleLoading);
+    await userService.signUpWithGoogle(setIsGoogleLoading);
   };
 
   return (
@@ -136,7 +137,7 @@ const SignUpScreen = ({ navigation }: any) => {
             ) : (
               <>
                 <Image
-                  source={require('../../assets/google-logo.png')}
+                  source={googleIcon}
                   className="w-6 h-6 mr-3"
                   resizeMode="contain"
                 />

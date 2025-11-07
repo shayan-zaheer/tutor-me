@@ -12,6 +12,10 @@ import { BookingData, ScheduleData, ProcessedSlot } from '../types/index';
 const buildBookedSlots = (bookingsData: BookingData[]): Set<string> => {
   const bookedSlots = new Set<string>();
   
+  if (!Array.isArray(bookingsData)) {
+    return bookedSlots;
+  }
+  
   bookingsData.forEach(booking => {
     if (!booking?.bookedSlot) return;
     
@@ -56,8 +60,13 @@ const filterAvailableSchedules = (
   schedulesData: ScheduleData[], 
   bookingsData: BookingData[]
 ): ScheduleData[] => {
+  if (!Array.isArray(schedulesData)) {
+    console.warn('schedulesData is not an array:', schedulesData);
+    return [];
+  }
+
   const now = getCurrentDate();
-  const bookedSlots = buildBookedSlots(bookingsData);
+  const bookedSlots = buildBookedSlots(bookingsData || []);
 
   return schedulesData
     .map(schedule => {
@@ -69,27 +78,47 @@ const filterAvailableSchedules = (
 
 export const useTutorSchedules = (currentUserId: string | undefined) => {
   const [allTutors, setAllTutors] = useState<ScheduleData[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!currentUserId) return;
+    if (!currentUserId) {
+      setIsLoading(false);
+      return;
+    }
 
     setIsLoading(true);
     const firestoreCurrentUserReference = firestore().collection('users').doc(currentUserId);
 
     let latestSchedules: ScheduleData[] = [];
     let latestBookings: BookingData[] = [];
+    let schedulesLoaded = false;
+    let bookingsLoaded = false;
 
     const processAndSetTutors = (
       schedulesData: ScheduleData[], 
-      bookingsData: BookingData[]
+      bookingsData: BookingData[],
+      fromSchedules = false,
+      fromBookings = false
     ) => {
       try {
+        if (fromSchedules) schedulesLoaded = true;
+        if (fromBookings) bookingsLoaded = true;
+
+        if (!Array.isArray(schedulesData)) {
+          console.warn('schedulesData is not an array, skipping processing');
+          setIsLoading(false);
+          return;
+        }
+
         const tutorsWithBookingStatus = filterAvailableSchedules(schedulesData, bookingsData);
         setAllTutors(tutorsWithBookingStatus);
-        setIsLoading(false);
+        
+        if (schedulesLoaded && bookingsLoaded) {
+          setIsLoading(false);
+        }
       } catch (err) {
         console.error('Error in processing schedules/bookings:', err);
+        setAllTutors([]);
         setIsLoading(false);
       }
     };
@@ -97,31 +126,49 @@ export const useTutorSchedules = (currentUserId: string | undefined) => {
     const schedulesUnsub = firestore()
       .collection('schedules')
       .where('tutorId', '!=', firestoreCurrentUserReference)
-      .onSnapshot(async schedulesSnapshot => {
-        try {
-          const populated = await populateReferences(schedulesSnapshot);
-          latestSchedules = populated;
-          processAndSetTutors(latestSchedules, latestBookings);
-        } catch (err) {
-          console.error('Error populating schedules:', err);
+      .onSnapshot(
+        async schedulesSnapshot => {
+          try {
+            const populated = await Promise.all(
+              schedulesSnapshot.docs.map(async doc => {
+                const data = doc.data();
+                const populatedData = await populateReferences(data);
+                return { id: doc.id, ...populatedData };
+              })
+            );
+            latestSchedules = populated;
+            processAndSetTutors(latestSchedules, latestBookings, true, false);
+          } catch (err) {
+            console.error('Error populating schedules:', err);
+            setIsLoading(false);
+          }
+        },
+        (error) => {
+          console.error('Error in schedules snapshot:', error);
           setIsLoading(false);
         }
-      });
+      );
 
     const bookingsUnsub = firestore()
       .collection('bookings')
-      .onSnapshot(bookingsSnapshot => {
-        try {
-          latestBookings = bookingsSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-          }));
-          processAndSetTutors(latestSchedules, latestBookings);
-        } catch (err) {
-          console.error('Error reading bookings:', err);
+      .onSnapshot(
+        bookingsSnapshot => {
+          try {
+            latestBookings = bookingsSnapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data(),
+            }));
+            processAndSetTutors(latestSchedules, latestBookings, false, true);
+          } catch (err) {
+            console.error('Error reading bookings:', err);
+            setIsLoading(false);
+          }
+        },
+        (error) => {
+          console.error('Error in bookings snapshot:', error);
           setIsLoading(false);
         }
-      });
+      );
 
     return () => {
       schedulesUnsub();

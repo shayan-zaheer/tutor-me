@@ -10,16 +10,15 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
-import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { 
   formatTimeRange, 
-  timestampToDate,
   calculateSlotPrice
 } from '../utils/dateUtil';
 import { useTutorSchedules } from '../hooks/useTutorSchedules';
 import { ScheduleData as TutorSchedule, ProcessedSlot } from '../types/index';
+import { bookingService } from '../services/bookingService';
 
 const TutorListScreen = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -85,32 +84,14 @@ const TutorListScreen = () => {
 
     try {
       const tutorId = selectedTutor.tutorId.id;
-      const firestoreTutorReference = firestore().collection('users').doc(tutorId);
-      const firestoreStudentReference = firestore().collection('users').doc(currentUser.uid);
 
-      const studentBookingsSnapshot = await firestore()
-        .collection('bookings')
-        .where('student', '==', firestoreStudentReference)
-        .get();
+      const hasBookingConflict = await bookingService.checkStudentBookingConflict(
+        currentUser.uid,
+        selectedSlot.startTime,
+        selectedSlot.endTime
+      );
 
-      const hasTimeConflict = studentBookingsSnapshot.docs.some(doc => {
-        const booking = doc.data();
-        if (booking.bookedSlot) {
-          const existingStart = timestampToDate(booking.bookedSlot.startTime);
-          const existingEnd = timestampToDate(booking.bookedSlot.endTime);
-          const newStart = timestampToDate(selectedSlot.startTime);
-          const newEnd = timestampToDate(selectedSlot.endTime);
-
-          return (
-            (newStart >= existingStart && newStart < existingEnd) ||
-            (newEnd > existingStart && newEnd <= existingEnd) ||
-            (newStart <= existingStart && newEnd >= existingEnd)
-          );
-        }
-        return false;
-      });
-
-      if (hasTimeConflict) {
+      if (hasBookingConflict) {
         Alert.alert(
           'Booking Conflict',
           'You already have a booking at this time.',
@@ -118,29 +99,11 @@ const TutorListScreen = () => {
         return;
       }
 
-      const studentSchedulesSnapshot = await firestore()
-        .collection('schedules')
-        .where('tutorId', '==', firestoreStudentReference)
-        .get();
-
-      const hasTeachingConflict = studentSchedulesSnapshot.docs.some(doc => {
-        const schedule = doc.data();
-        if (schedule.slots) {
-          return schedule.slots.some((slot: any) => {
-            const existingStart = timestampToDate(slot.startTime);
-            const existingEnd = timestampToDate(slot.endTime);
-            const newStart = timestampToDate(selectedSlot.startTime);
-            const newEnd = timestampToDate(selectedSlot.endTime);
-
-            return (
-              (newStart >= existingStart && newStart < existingEnd) ||
-              (newEnd > existingStart && newEnd <= existingEnd) ||
-              (newStart <= existingStart && newEnd >= existingEnd)
-            );
-          });
-        }
-        return false;
-      });
+      const hasTeachingConflict = await bookingService.checkTeachingConflict(
+        currentUser.uid,
+        selectedSlot.startTime,
+        selectedSlot.endTime
+      );
 
       if (hasTeachingConflict) {
         Alert.alert(
@@ -150,26 +113,19 @@ const TutorListScreen = () => {
         return;
       }
 
-      const scheduleRef = firestore()
-        .collection('schedules')
-        .doc(selectedSlot.scheduleId);
+      const price = calculateSlotPrice(
+        selectedSlot.startTime, 
+        selectedSlot.endTime, 
+        selectedTutor.tutorId.profile?.hourlyRate || 0
+      );
 
-      const bookingData = {
-        tutor: firestoreTutorReference,
-        student: firestoreStudentReference,
-        schedule: scheduleRef,
-        bookedSlot: {
-          startTime: selectedSlot.startTime,
-          endTime: selectedSlot.endTime,
-          price: calculateSlotPrice(selectedSlot.startTime, selectedSlot.endTime, selectedTutor.tutorId.profile?.hourlyRate || 0),
-        },
-        ratings: 0,
-        isPaid: true,
-        review: '',
-        createdAt: firestore.FieldValue.serverTimestamp(),
-      };
-
-      await firestore().collection('bookings').add(bookingData);
+      await bookingService.createBooking({
+        tutorId,
+        studentId: currentUser.uid,
+        scheduleId: selectedSlot.scheduleId,
+        slot: selectedSlot,
+        price,
+      });
 
       setShowBookingModal(false);
 
@@ -297,6 +253,16 @@ const TutorListScreen = () => {
       {isLoading ? (
         <View className="flex-1 justify-center items-center">
           <ActivityIndicator size="large" color="#008080" />
+        </View>
+      ) : filteredTutors.length === 0 ? (
+        <View className="flex-1 justify-center items-center px-6">
+          <Icon name="people-outline" size={64} color="#9CA3AF" />
+          <Text className="text-lg font-semibold text-gray-700 mt-4 text-center">
+            No Tutors Available
+          </Text>
+          <Text className="text-gray-500 mt-2 text-center">
+            There are currently no tutors available for your search criteria. Please try again later or adjust your filters.
+          </Text>
         </View>
       ) : (
         <FlatList

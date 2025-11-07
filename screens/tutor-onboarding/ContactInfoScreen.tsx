@@ -1,34 +1,31 @@
 import { Text, View, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { useEffect, useState } from 'react';
 import CommunicationMethod from '../../components/CommunicationMethod';
-import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { userService } from '../../services/userService';
 
 const ContactInfoScreen = () => {
   const currentUser = auth().currentUser;
   useEffect(() => {
     if (!currentUser?.uid) return;
 
-    const unsubscribe = firestore()
-      .collection('users')
-      .doc(currentUser.uid)
-      .onSnapshot(doc => {
-        if (doc.exists()) {
-          const data = doc.data();
-          setNumber(data?.contact || '');
-        }
-      });
+    const loadUserProfile = async () => {
+      try {
+        const userData = await userService.getUserProfile(currentUser.uid);
+        setNumber(userData?.contact || '');
+      } catch (error) {
+        console.error('Error loading user profile:', error);
+      }
+    };
 
-    return () => unsubscribe();
+    loadUserProfile();
   }, [currentUser?.uid]);
 
   const handleNumberSave = async () => {
-    if (!number) return;
+    if (!number || !currentUser?.uid) return;
     try {
-      await firestore().collection('users').doc(currentUser?.uid).update({
-        contact: number.toString(),
-      });
+      await userService.updateUserContactInfo(currentUser.uid, number.toString());
     } catch (err) {
       console.error('Error saving contact info:', err);
     }

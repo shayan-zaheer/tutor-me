@@ -9,8 +9,9 @@ import {
 } from 'react-native';
 import React, { useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { signInWithEmailAndPasswordService, signInWithGoogleService } from '../../services/userService';
+import { userService } from '../../services/userService';
 import AuthInput from '../../components/AuthInput';
+const googleIcon = require('../../assets/google-logo.png');
 
 const LoginScreen = ({ navigation }: any) => {
   const [email, setEmail] = useState('');
@@ -19,11 +20,11 @@ const LoginScreen = ({ navigation }: any) => {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const handleAuth = async () => {
-    await signInWithEmailAndPasswordService(email, password, setIsLocalLoading);
+    await userService.signInWithEmailAndPassword(email, password, setIsLocalLoading);
   };
 
   const handleGoogleSignIn = async () => {
-    await signInWithGoogleService(setIsGoogleLoading);
+    await userService.signInWithGoogle(setIsGoogleLoading);
   };
 
   return (
@@ -104,7 +105,7 @@ const LoginScreen = ({ navigation }: any) => {
             ) : (
               <>
                 <Image
-                  source={require('../../assets/google-logo.png')}
+                  source={googleIcon}
                   className="w-6 h-6 mr-3"
                   resizeMode="contain"
                 />

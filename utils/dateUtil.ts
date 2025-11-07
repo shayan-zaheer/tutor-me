@@ -199,7 +199,6 @@ export const sortBookingsByDate = <T extends { bookedSlot: { startTime: Firebase
   );
 };
 
-// Calculate price based on duration and hourly rate
 export const calculateSlotPrice = (
   startTime: FirebaseFirestoreTypes.Timestamp, 
   endTime: FirebaseFirestoreTypes.Timestamp, 
