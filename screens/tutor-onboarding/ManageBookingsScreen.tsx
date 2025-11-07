@@ -7,8 +7,9 @@ import {
   Alert,
   Modal,
 } from 'react-native';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import auth from '@react-native-firebase/auth';
+import { PageContainer } from '../../components/PageContainer';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { 
   formatBookingCardDisplay, 
@@ -18,11 +19,11 @@ import {
   isWithinTimeThreshold
 } from '../../utils/dateUtil';
 import { bookingService } from '../../services/bookingService';
+import { GestureHandlerRootView, GestureDetector } from 'react-native-gesture-handler';
+import Animated from 'react-native-reanimated';
+import { useTabGesture } from '../../hooks/useTabGesture';
 
 const ManageBookingsScreen = () => {
-  const [selectedTab, setSelectedTab] = useState<
-    'upcoming' | 'completed'
-  >('upcoming');
   const [upcomingBookings, setUpcomingBookings] = useState<any[]>([]);
   const [completedBookings, setCompletedBookings] = useState<any[]>([]);
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
@@ -31,6 +32,8 @@ const ManageBookingsScreen = () => {
   const [showMarkCompleteModal, setShowMarkCompleteModal] = useState(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const currentUser = auth().currentUser;
+
+  const { selectedTab, switchToTab, animatedStyle, panGesture, SCREEN_WIDTH } = useTabGesture();
 
   const checkIfCanDelete = (booking: any) => {
     if (isWithinTimeThreshold(booking.bookedSlot.startTime, 15)) {
@@ -69,7 +72,7 @@ const ManageBookingsScreen = () => {
     }
   };
 
-  useEffect(() => {
+  const loadBookings = useCallback(() => {
     if (!currentUser?.uid) return;
 
     setIsLoading(true);
@@ -97,8 +100,11 @@ const ManageBookingsScreen = () => {
         console.error('Error loading tutor bookings:', error);
         setIsLoading(false);
       });
-
   }, [currentUser?.uid]);
+
+  useEffect(() => {
+    loadBookings();
+  }, [currentUser?.uid, loadBookings]);
 
   const renderBookingItem = ({ item: booking }: { item: any }) => {
     const bookingStart = timestampToMillis(booking.bookedSlot.startTime);
@@ -161,158 +167,200 @@ const ManageBookingsScreen = () => {
     );
   };
 
-  return (
-    <View className="flex-1 p-4 gap-y-2">
-      <View className="border border-gray-300 bg-[#F7F8FC] rounded-full flex-row justify-between items-center p-1 mb-3">
-        <TouchableOpacity
-          className={`flex-1 p-2 rounded-full ${
-            selectedTab === 'upcoming' ? 'bg-teal-700' : ''
-          }`}
-          onPress={() => setSelectedTab('upcoming')}
-        >
-          <Text
-            className={`text-center font-semibold ${
-              selectedTab === 'upcoming' ? 'text-white' : 'text-gray-400'
-            }`}
-          >
-            Upcoming
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          className={`flex-1 p-2 rounded-full ${
-            selectedTab === 'completed' ? 'bg-teal-700' : ''
-          }`}
-          onPress={() => setSelectedTab('completed')}
-        >
-          <Text
-            className={`text-center font-semibold ${
-              selectedTab === 'completed' ? 'text-white' : 'text-gray-400'
-            }`}
-          >
-            Completed
-          </Text>
-        </TouchableOpacity>
-      </View>
+  const renderContent = (tab: 'upcoming' | 'completed') => {
+    const bookings = tab === 'upcoming' ? upcomingBookings : completedBookings;
+    const isLoadingTab = isLoading && bookings.length === 0;
+    const isEmpty = !isLoading && bookings.length === 0;
 
-      <Modal visible={showDeleteModal} transparent animationType="slide">
-        <View className="flex-1 bg-black/50 justify-center items-center px-4">
-          <View className="bg-white rounded-xl p-6 w-full max-w-sm">
-            <Text className="text-xl font-bold text-center mb-4">
-              Delete Booking
-            </Text>
-            <Text className="text-center text-gray-700 mb-4">
-              Are you sure you want to delete this booking?
-            </Text>
-
-            <View className="flex-row justify-between">
-              <TouchableOpacity
-                className="bg-gray-300 px-6 py-3 rounded-lg flex-1 mr-2"
-                onPress={() => setShowDeleteModal(false)}
-              >
-                <Text className="text-center font-semibold">Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                className="bg-red-500 px-6 py-3 rounded-lg flex-1 ml-2"
-                onPress={() =>
-                  deleteBooking(selectedBooking ? selectedBooking.id : '')
-                }
-              >
-                <Text className="text-white text-center font-semibold">
-                  Delete
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal visible={showTimeWarningModal} transparent animationType="slide">
-        <View className="flex-1 bg-black/50 justify-center items-center px-4">
-          <View className="bg-white rounded-xl p-6 w-full max-w-sm">
-            <Text className="text-xl font-bold text-center mb-4">
-              Cannot Delete
-            </Text>
-            <Text className="text-center text-gray-700 mb-4">
-              This booking starts in less than 15 minutes and cannot be deleted.
-            </Text>
-
-            <TouchableOpacity
-              className="bg-teal-700 px-6 py-3 rounded-lg"
-              onPress={() => setShowTimeWarningModal(false)}
-            >
-              <Text className="text-white text-center font-semibold">
-                OK
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal visible={showMarkCompleteModal} transparent animationType="slide">
-        <View className="flex-1 bg-black/50 justify-center items-center px-4">
-          <View className="bg-white rounded-xl p-6 w-full max-w-sm">
-            <Text className="text-xl font-bold text-center mb-4">
-              Mark as Complete
-            </Text>
-            <Text className="text-center text-gray-700 mb-4">
-              Mark this booking as completed?
-            </Text>
-
-            <View className="flex-row justify-between">
-              <TouchableOpacity
-                className="bg-gray-300 px-6 py-3 rounded-lg flex-1 mr-2"
-                onPress={() => setShowMarkCompleteModal(false)}
-              >
-                <Text className="text-center font-semibold">Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                className="bg-green-500 px-6 py-3 rounded-lg flex-1 ml-2"
-                onPress={() =>
-                  markBookingComplete(selectedBooking ? selectedBooking.id : '')
-                }
-              >
-                <Text className="text-white text-center font-semibold">
-                  Complete
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {isLoading &&
-      ((selectedTab === 'completed' && completedBookings.length === 0) ||
-        (selectedTab === 'upcoming' && upcomingBookings.length === 0)) ? (
+    if (isLoadingTab) {
+      return (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size={50} />
         </View>
-      ) : !isLoading &&
-        ((selectedTab === 'completed' && completedBookings.length === 0) ||
-          (selectedTab === 'upcoming' && upcomingBookings.length === 0)) ? (
+      );
+    }
+
+    if (isEmpty) {
+      return (
         <View className="flex-1 items-center justify-center">
           <Icon name="calendar-outline" size={60} color="#ccc" />
           <Text className="text-gray-500 text-lg font-medium mt-4">
-            No {selectedTab} bookings
+            No {tab} bookings
           </Text>
           <Text className="text-gray-400 text-sm mt-2 text-center px-8">
-            {selectedTab === 'upcoming'
+            {tab === 'upcoming'
               ? 'You have no upcoming sessions scheduled'
               : 'You have no completed sessions'}
           </Text>
         </View>
-      ) : (
-        <FlatList
-          horizontal={false}
-          data={selectedTab === 'upcoming' ? upcomingBookings : completedBookings}
-          renderItem={renderBookingItem}
-          keyExtractor={item => item.id}
-          className="pb-5"
-          showsVerticalScrollIndicator={false}
-        />
-      )}
-    </View>
+      );
+    }
+
+    return (
+      <FlatList
+        horizontal={false}
+        data={bookings}
+        renderItem={renderBookingItem}
+        keyExtractor={item => item.id}
+        className="pb-5"
+        showsVerticalScrollIndicator={false}
+        refreshing={isLoading}
+        onRefresh={loadBookings}
+      />
+    );
+  };
+
+  return (
+    <PageContainer 
+      enableKeyboardAvoiding={false}
+    >
+      <GestureHandlerRootView className="flex-1">
+        <View className="flex-1 pt-4 gap-y-2">
+        <View className="mx-4 border border-gray-300 bg-[#F7F8FC] rounded-full flex-row justify-between items-center p-1 mb-3">
+          <TouchableOpacity
+            className={`flex-1 p-2 rounded-full ${
+              selectedTab === 'upcoming' ? 'bg-teal-700' : ''
+            }`}
+            onPress={() => switchToTab('upcoming')}
+          >
+            <Text
+              className={`text-center font-semibold ${
+                selectedTab === 'upcoming' ? 'text-white' : 'text-gray-400'
+              }`}
+            >
+              Upcoming
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            className={`flex-1 p-2 rounded-full ${
+              selectedTab === 'completed' ? 'bg-teal-700' : ''
+            }`}
+            onPress={() => switchToTab('completed')}
+          >
+            <Text
+              className={`text-center font-semibold ${
+                selectedTab === 'completed' ? 'text-white' : 'text-gray-400'
+              }`}
+            >
+              Completed
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <Modal visible={showDeleteModal} transparent animationType="slide">
+          <View className="flex-1 bg-black/50 justify-center items-center px-4">
+            <View className="bg-white rounded-xl p-6 w-full max-w-sm">
+              <Text className="text-xl font-bold text-center mb-4">
+                Delete Booking
+              </Text>
+              <Text className="text-center text-gray-700 mb-4">
+                Are you sure you want to delete this booking?
+              </Text>
+
+              <View className="flex-row justify-between">
+                <TouchableOpacity
+                  className="bg-gray-300 px-6 py-3 rounded-lg flex-1 mr-2"
+                  onPress={() => setShowDeleteModal(false)}
+                >
+                  <Text className="text-center font-semibold">Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  className="bg-red-500 px-6 py-3 rounded-lg flex-1 ml-2"
+                  onPress={() =>
+                    deleteBooking(selectedBooking ? selectedBooking.id : '')
+                  }
+                >
+                  <Text className="text-white text-center font-semibold">
+                    Delete
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal visible={showTimeWarningModal} transparent animationType="slide">
+          <View className="flex-1 bg-black/50 justify-center items-center px-4">
+            <View className="bg-white rounded-xl p-6 w-full max-w-sm">
+              <Text className="text-xl font-bold text-center mb-4">
+                Cannot Delete
+              </Text>
+              <Text className="text-center text-gray-700 mb-4">
+                This booking starts in less than 15 minutes and cannot be deleted.
+              </Text>
+
+              <TouchableOpacity
+                className="bg-teal-700 px-6 py-3 rounded-lg"
+                onPress={() => setShowTimeWarningModal(false)}
+              >
+                <Text className="text-white text-center font-semibold">
+                  OK
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal visible={showMarkCompleteModal} transparent animationType="slide">
+          <View className="flex-1 bg-black/50 justify-center items-center px-4">
+            <View className="bg-white rounded-xl p-6 w-full max-w-sm">
+              <Text className="text-xl font-bold text-center mb-4">
+                Mark as Complete
+              </Text>
+              <Text className="text-center text-gray-700 mb-4">
+                Mark this booking as completed?
+              </Text>
+
+              <View className="flex-row justify-between">
+                <TouchableOpacity
+                  className="bg-gray-300 px-6 py-3 rounded-lg flex-1 mr-2"
+                  onPress={() => setShowMarkCompleteModal(false)}
+                >
+                  <Text className="text-center font-semibold">Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  className="bg-green-500 px-6 py-3 rounded-lg flex-1 ml-2"
+                  onPress={() =>
+                    markBookingComplete(selectedBooking ? selectedBooking.id : '')
+                  }
+                >
+                  <Text className="text-white text-center font-semibold">
+                    Complete
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        <GestureDetector gesture={panGesture}>
+          <Animated.View 
+            style={[
+              {
+                flex: 1,
+                flexDirection: 'row',
+                width: SCREEN_WIDTH * 2,
+              },
+              animatedStyle
+            ]}
+          >
+            <View style={{ width: SCREEN_WIDTH }}>
+              <View style={{ paddingHorizontal: 16, flex: 1 }}>
+                {renderContent('upcoming')}
+              </View>
+            </View>
+            <View style={{ width: SCREEN_WIDTH }}>
+              <View style={{ paddingHorizontal: 16, flex: 1 }}>
+                {renderContent('completed')}
+              </View>
+            </View>
+          </Animated.View>
+        </GestureDetector>
+      </View>
+      </GestureHandlerRootView>
+    </PageContainer>
   );
 };
 

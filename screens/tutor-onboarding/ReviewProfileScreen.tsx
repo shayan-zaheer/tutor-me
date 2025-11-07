@@ -3,6 +3,7 @@ import { Alert, Modal, Text, TextInput, TouchableOpacity, View } from 'react-nat
 import auth from '@react-native-firebase/auth';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { userService } from '../../services/userService';
+import { PageContainer } from '../../components/PageContainer';
 import SelectDropdown from 'react-native-select-dropdown';
 
 const ReviewProfileScreen = () => {
@@ -76,9 +77,35 @@ const ReviewProfileScreen = () => {
     }
   };
 
+  const handleHourlyRateSave = async () => {
+    const hourlyRate = parseFloat(user?.profile?.hourlyRate?.toString() || '0');
+    
+    if (isNaN(hourlyRate) || hourlyRate < 0) {
+      Alert.alert('Validation Error', 'Please enter a valid hourly rate (0 or greater).');
+      return;
+    }
+
+    try {
+      if (currentUser?.uid && user) {
+        await userService.updateUserProfile(currentUser.uid, {
+          profile: {
+            ...user.profile,
+            hourlyRate: hourlyRate,
+          },
+        });
+      }
+    } catch (err) {
+      console.error('Error in saving hourly rate:', err);
+    } finally {
+      setShowModal(null);
+    }
+  };
+
   const handleConfirmProfile = () => {
     const hasValidName = user?.name && user.name.trim().length > 0;
     const hasValidSpeciality = selectedSpeciality && selectedSpeciality !== 'Select your speciality';
+    const hourlyRate = parseFloat(user?.profile?.hourlyRate?.toString() || '0');
+    const hasValidHourlyRate = !isNaN(hourlyRate) && hourlyRate >= 0;
     
     if (!hasValidName) {
       Alert.alert('Profile Incomplete', 'Please add your name before confirming your profile.');
@@ -87,6 +114,11 @@ const ReviewProfileScreen = () => {
     
     if (!hasValidSpeciality) {
       Alert.alert('Profile Incomplete', 'Please select your speciality before confirming your profile.');
+      return;
+    }
+    
+    if (!hasValidHourlyRate) {
+      Alert.alert('Profile Incomplete', 'Please set a valid hourly rate before confirming your profile.');
       return;
     }
     
@@ -103,7 +135,8 @@ const ReviewProfileScreen = () => {
   );
   const [user, setUser] = useState<any>(null);
   return (
-    <View className="p-4 gap-y-4 flex-1">
+    <PageContainer>
+      <View className="p-4 gap-y-4 flex-1">
       <Text className="text-xl font-bold">Review Your Profile</Text>
       <View className="flex-row items-center justify-between rounded-lg bg-white p-4">
         <View className="flex-row items-center flex-1">
@@ -138,6 +171,26 @@ const ReviewProfileScreen = () => {
           </View>
         </View>
         <TouchableOpacity onPress={() => setShowModal('profile')}>
+          <View className="flex-row items-center">
+            <Icon name="pencil" size={15} color="#008080" />
+            <Text className="ml-2 text-teal-600">Edit</Text>
+          </View>
+        </TouchableOpacity>
+      </View>
+
+      <View className="flex-row items-center justify-between rounded-lg bg-white p-4">
+        <View className="flex-row items-center flex-1">
+          <View className="p-3 rounded-lg bg-teal-100 items-center justify-center">
+            <Icon name="cash-outline" size={20} color="#008080" />
+          </View>
+          <View className="ml-3 gap-y-2 flex-1">
+            <Text className="text-lg">Hourly Rate</Text>
+            <Text className="text-gray-500">
+              PKR {user?.profile?.hourlyRate || '0'}/hour
+            </Text>
+          </View>
+        </View>
+        <TouchableOpacity onPress={() => setShowModal('hourlyRate')}>
           <View className="flex-row items-center">
             <Icon name="pencil" size={15} color="#008080" />
             <Text className="ml-2 text-teal-600">Edit</Text>
@@ -281,7 +334,58 @@ const ReviewProfileScreen = () => {
           </View>
         </View>
       </Modal>
-    </View>
+
+      <Modal
+        visible={showModal === 'hourlyRate'}
+        animationType="slide"
+        transparent
+      >
+        <View className="flex-1 bg-black/50 p-4 justify-center items-center">
+          <View className="bg-white rounded-lg max-w-sm w-full p-6 gap-y-2">
+            <Text className="text-center font-bold text-lg">Set Hourly Rate</Text>
+            <Text className="font-semibold text-md ml-1">Hourly Rate ($)</Text>
+            <TextInput
+              className="p-3 border border-gray-300 rounded-xl"
+              placeholder="Enter your hourly rate (e.g., 25)"
+              placeholderTextColor={'#666'}
+              value={user?.profile?.hourlyRate?.toString() || ''}
+              onChangeText={text => {
+                const numericText = text.replace(/[^0-9.]/g, '');
+                setUser((prev: any) => ({
+                  ...prev,
+                  profile: { 
+                    ...prev?.profile, 
+                    hourlyRate: numericText === '' ? '' : parseFloat(numericText) || 0
+                  },
+                }));
+              }}
+              keyboardType="decimal-pad"
+              autoCorrect={false}
+              spellCheck={false}
+              autoCapitalize="none"
+            />
+            <Text className="text-xs text-gray-500 ml-1 mt-1">
+              This rate will be used to calculate session prices based on duration.
+            </Text>
+            <View className="flex-row justify-between mt-4">
+              <TouchableOpacity
+                className="bg-gray-300 rounded-xl flex-1 px-6 py-3 mr-2"
+                onPress={() => setShowModal(null)}
+              >
+                <Text className="text-center font-bold">Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="bg-teal-600 rounded-xl flex-1 px-6 py-3 ml-2"
+                onPress={handleHourlyRateSave}
+              >
+                <Text className="text-center text-white font-bold">Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      </View>
+    </PageContainer>
   );
 };
 

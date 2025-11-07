@@ -5,12 +5,11 @@ import {
   ActivityIndicator,
   ScrollView,
   Image,
-  KeyboardAvoidingView,
 } from 'react-native';
 import React, { useState } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { userService } from '../../services/userService';
 import AuthInput from '../../components/AuthInput';
+import { PageContainer } from '../../components/PageContainer';
 const googleIcon = require('../../assets/google-logo.png');
 
 const LoginScreen = ({ navigation }: any) => {
@@ -28,12 +27,10 @@ const LoginScreen = ({ navigation }: any) => {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-blue-50">
-      <KeyboardAvoidingView 
-        behavior={'padding'}
-        keyboardVerticalOffset={100}
-        className="flex-1"
-      >
+    <PageContainer 
+      backgroundColor="#eff6ff"
+      keyboardVerticalOffset={100}
+    >
         <ScrollView
           className="flex-1 p-6"
           keyboardShouldPersistTaps="handled"
@@ -125,8 +122,7 @@ const LoginScreen = ({ navigation }: any) => {
           </TouchableOpacity>
         </View>
         </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+    </PageContainer>
   );
 };
 

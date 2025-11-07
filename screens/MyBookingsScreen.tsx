@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import auth from '@react-native-firebase/auth';
+import { PageContainer } from '../components/PageContainer';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { Booking } from '../types';
 import { 
@@ -19,11 +20,16 @@ import {
   sortBookingsByDate
 } from '../utils/dateUtil';
 import { bookingService } from '../services/bookingService';
+import { GestureHandlerRootView, GestureDetector } from 'react-native-gesture-handler';
+import Animated from 'react-native-reanimated';
+import { useTabGesture } from '../hooks/useTabGesture';
 
-const BookingSections = ({ bookings, renderBookingCard, selectedTab }: { 
+const BookingSections = ({ bookings, renderBookingCard, tab, isLoading, onRefresh }: { 
   bookings: Booking[], 
   renderBookingCard: ({ item }: { item: any }) => React.JSX.Element,
-  selectedTab: 'upcoming' | 'completed'
+  tab: 'upcoming' | 'completed',
+  isLoading: boolean,
+  onRefresh: () => void,
 }) => {
   const now = getCurrentDate();
   const upcomingBookings = sortBookingsByDate(bookings.filter(
@@ -35,11 +41,11 @@ const BookingSections = ({ bookings, renderBookingCard, selectedTab }: {
 
   const sectionsData = [];
   
-  if (selectedTab === 'upcoming' && upcomingBookings.length > 0) {
+  if (tab === 'upcoming' && upcomingBookings.length > 0) {
     sectionsData.push(...upcomingBookings.map(booking => ({ type: 'booking', ...booking })));
   }
   
-  if (selectedTab === 'completed' && pastBookings.length > 0) {
+  if (tab === 'completed' && pastBookings.length > 0) {
     sectionsData.push(...pastBookings.map(booking => ({ type: 'booking', ...booking })));
   }
 
@@ -52,10 +58,10 @@ const BookingSections = ({ bookings, renderBookingCard, selectedTab }: {
       <View className="flex-1 justify-center items-center px-4">
         <Icon name="calendar-outline" size={80} color="#14b8a6" />
         <Text className="text-xl font-bold text-center mt-4 mb-2">
-          {selectedTab === 'upcoming' ? 'No Upcoming Sessions' : 'No Completed Sessions'}
+          {tab === 'upcoming' ? 'No Upcoming Sessions' : 'No Completed Sessions'}
         </Text>
         <Text className="text-gray-600 text-center">
-          {selectedTab === 'upcoming' 
+          {tab === 'upcoming' 
             ? 'Book a session with a tutor to get started!' 
             : 'Your completed sessions will appear here.'}
         </Text>
@@ -69,6 +75,8 @@ const BookingSections = ({ bookings, renderBookingCard, selectedTab }: {
       keyExtractor={item => (item as any).key || (item as any).id}
       renderItem={renderItem}
       showsVerticalScrollIndicator={false}
+      refreshing={isLoading}
+      onRefresh={onRefresh}
       className="pb-5"
     />
   );
@@ -82,10 +90,11 @@ const MyBookingsScreen = () => {
   const [rating, setRating] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [review, setReview] = useState('');
-  const [selectedTab, setSelectedTab] = useState<'upcoming' | 'completed'>('upcoming');
   const currentUser = auth().currentUser;
 
-  useEffect(() => {
+  const { selectedTab, switchToTab, animatedStyle, panGesture, SCREEN_WIDTH } = useTabGesture();
+
+  const loadBookings = useCallback(() => {
     if (!currentUser) return;
 
     setIsLoading(true);
@@ -100,8 +109,11 @@ const MyBookingsScreen = () => {
         console.error('Error loading bookings:', err);
         setIsLoading(false);
       });
-
   }, [currentUser]);
+
+  useEffect(() => {
+    loadBookings();
+  }, [loadBookings]);
 
   const deleteBooking = async (bookingId: string) => {
     try {
@@ -286,7 +298,10 @@ const MyBookingsScreen = () => {
   };
 
   return (
-    <View className="flex-1 bg-gray-50">
+    <PageContainer 
+      enableKeyboardAvoiding={false}
+      backgroundColor="#f9fafb"
+    >
       {isLoading ? (
         <View className="flex-1 justify-center items-center">
           <ActivityIndicator size="large" color="#008080" />
@@ -302,43 +317,76 @@ const MyBookingsScreen = () => {
           </Text>
         </View>
       ) : (
-        <View className="flex-1">
-          <View className="border border-gray-300 bg-[#F7F8FC] rounded-full flex-row justify-between items-center p-1 mb-3 mx-4 mt-4">
-            <TouchableOpacity
-              className={`flex-1 p-2 rounded-full ${
-                selectedTab === 'upcoming' ? 'bg-teal-700' : ''
-              }`}
-              onPress={() => setSelectedTab('upcoming')}
-            >
-              <Text
-                className={`text-center font-semibold ${
-                  selectedTab === 'upcoming' ? 'text-white' : 'text-gray-400'
+        <GestureHandlerRootView className="flex-1">
+          <View className="flex-1 pt-4 gap-y-2">
+            <View className="mx-4 border border-gray-300 bg-[#F7F8FC] rounded-full flex-row justify-between items-center p-1 mb-3">
+              <TouchableOpacity
+                className={`flex-1 p-2 rounded-full ${
+                  selectedTab === 'upcoming' ? 'bg-teal-700' : ''
                 }`}
+                onPress={() => switchToTab('upcoming')}
               >
-                Upcoming
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              className={`flex-1 p-2 rounded-full ${
-                selectedTab === 'completed' ? 'bg-teal-700' : ''
-              }`}
-              onPress={() => setSelectedTab('completed')}
-            >
-              <Text
-                className={`text-center font-semibold ${
-                  selectedTab === 'completed' ? 'text-white' : 'text-gray-400'
+                <Text
+                  className={`text-center font-semibold ${
+                    selectedTab === 'upcoming' ? 'text-white' : 'text-gray-400'
+                  }`}
+                >
+                  Upcoming
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className={`flex-1 p-2 rounded-full ${
+                  selectedTab === 'completed' ? 'bg-teal-700' : ''
                 }`}
+                onPress={() => switchToTab('completed')}
               >
-                Completed
-              </Text>
-            </TouchableOpacity>
+                <Text
+                  className={`text-center font-semibold ${
+                    selectedTab === 'completed' ? 'text-white' : 'text-gray-400'
+                  }`}
+                >
+                  Completed
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <GestureDetector gesture={panGesture}>
+              <Animated.View 
+                style={[
+                  {
+                    flex: 1,
+                    flexDirection: 'row',
+                    width: SCREEN_WIDTH * 2,
+                  },
+                  animatedStyle
+                ]}
+              >
+                <View style={{ width: SCREEN_WIDTH }}>
+                  <View style={{ paddingHorizontal: 16, flex: 1 }}>
+                    <BookingSections 
+                      bookings={bookings} 
+                      renderBookingCard={renderBookingCard}
+                      tab="upcoming"
+                      isLoading={isLoading}
+                      onRefresh={loadBookings}
+                    />
+                  </View>
+                </View>
+                <View style={{ width: SCREEN_WIDTH }}>
+                  <View style={{ paddingHorizontal: 16, flex: 1 }}>
+                    <BookingSections 
+                      bookings={bookings} 
+                      renderBookingCard={renderBookingCard}
+                      tab="completed"
+                      isLoading={isLoading}
+                      onRefresh={loadBookings}
+                    />
+                  </View>
+                </View>
+              </Animated.View>
+            </GestureDetector>
           </View>
-          <BookingSections 
-            bookings={bookings} 
-            renderBookingCard={renderBookingCard}
-            selectedTab={selectedTab}
-          />
-        </View>
+        </GestureHandlerRootView>
       )}
 
       <Modal visible={showRatingModal} transparent animationType="fade">
@@ -424,7 +472,7 @@ const MyBookingsScreen = () => {
           </View>
         </View>
       </Modal>
-    </View>
+    </PageContainer>
   );
 };
 

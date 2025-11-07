@@ -4,6 +4,7 @@ import CommunicationMethod from '../../components/CommunicationMethod';
 import auth from '@react-native-firebase/auth';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { userService } from '../../services/userService';
+import { PageContainer } from '../../components/PageContainer';
 
 const ContactInfoScreen = () => {
   const currentUser = auth().currentUser;
@@ -45,7 +46,8 @@ const ContactInfoScreen = () => {
   ];
 
   return (
-    <View className="px-4 py-6 gap-y-4">
+    <PageContainer>
+      <View className="px-4 py-6 gap-y-4">
       <Text className="text-4xl font-bold">Contact Information</Text>
       <Text className="text-gray-600">
         Provide your contact details so students can reach you after a
@@ -91,7 +93,8 @@ const ContactInfoScreen = () => {
       >
         <Text className="font-bold text-white">Continue</Text>
       </TouchableOpacity>
-    </View>
+      </View>
+    </PageContainer>
   );
 };
 

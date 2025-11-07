@@ -11,6 +11,7 @@ import auth from '@react-native-firebase/auth';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { Tutor, QuickStat } from '../types';
 import { userService } from '../services/userService';
+import { PageContainer } from '../components/PageContainer';
 
 const HomeScreen = ({ navigation }: any) => {
   const [logoutModal, setLogoutModal] = useState(false);
@@ -104,7 +105,11 @@ const HomeScreen = ({ navigation }: any) => {
   );
 
   return (
-    <ScrollView className="flex-1 bg-gray-50">
+    <PageContainer 
+      enableKeyboardAvoiding={false}
+      backgroundColor="#f9fafb"
+    >
+      <ScrollView className="flex-1">
       <View className="bg-teal-600 px-6 py-8 rounded-b-3xl">
         <View className="flex-row items-center justify-between">
           <View className="flex-1">
@@ -241,7 +246,8 @@ const HomeScreen = ({ navigation }: any) => {
             </View>
         </View>
       </Modal>
-    </ScrollView>
+      </ScrollView>
+    </PageContainer>
   );
 };
 

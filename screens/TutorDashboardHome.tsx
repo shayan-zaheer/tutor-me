@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { PageContainer } from '../components/PageContainer';
 
 const TutorDashboardHome = ({ navigation }: any) => {
   const setupSteps = [
@@ -47,7 +48,10 @@ const TutorDashboardHome = ({ navigation }: any) => {
   };
 
   return (
-    <View className="flex-1 bg-gray-50">
+    <PageContainer 
+      enableKeyboardAvoiding={false}
+      backgroundColor="#f9fafb"
+    >
         <View className="mx-6 mt-6">
           <Text className="text-xl font-bold text-gray-800 mb-4">
             Manage Your Setup
@@ -93,8 +97,7 @@ const TutorDashboardHome = ({ navigation }: any) => {
           </TouchableOpacity>
         ))}
       </View>
-
-    </View>
+    </PageContainer>
   );
 };
 

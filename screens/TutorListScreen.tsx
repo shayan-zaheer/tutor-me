@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import auth from '@react-native-firebase/auth';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { PageContainer } from '../components/PageContainer';
 import { 
   formatTimeRange, 
   calculateSlotPrice
@@ -219,7 +220,7 @@ const TutorListScreen = () => {
                   </Text>
 
                   <Text className="text-center text-teal-600 font-semibold">
-                    ${calculateSlotPrice(slot.startTime, slot.endTime, tutor.tutorId.profile?.hourlyRate || 0)}
+                    PKR {calculateSlotPrice(slot.startTime, slot.endTime, tutor.tutorId.profile?.hourlyRate || 0)}
                   </Text>
                   {slot.isBooked && (
                     <Text className="text-center text-red-600 text-xs mt-1">
@@ -236,7 +237,10 @@ const TutorListScreen = () => {
   );
 
   return (
-    <View className="flex-1 bg-gray-50">
+    <PageContainer 
+      enableKeyboardAvoiding={false}
+      backgroundColor="#f9fafb"
+    >
       <View className="bg-white px-4 py-3 shadow-sm">
         <View className="flex-row items-center bg-gray-100 rounded-lg px-4 py-2">
           <Icon name="search" size={20} color="#666" />
@@ -256,7 +260,7 @@ const TutorListScreen = () => {
         </View>
       ) : filteredTutors.length === 0 ? (
         <View className="flex-1 justify-center items-center px-6">
-          <Icon name="people-outline" size={64} color="#9CA3AF" />
+          <Icon name="people-outline" size={80} color="#14b8a6" />
           <Text className="text-lg font-semibold text-gray-700 mt-4 text-center">
             No Tutors Available
           </Text>
@@ -291,7 +295,7 @@ const TutorListScreen = () => {
                   {selectedSlot.day} at {formatTimeRange(selectedSlot.startTime, selectedSlot.endTime)}
                 </Text>
                 <Text className="text-center text-lg font-bold text-teal-600 mb-6">
-                  Total: ${calculateSlotPrice(selectedSlot.startTime, selectedSlot.endTime, selectedTutor.tutorId.profile?.hourlyRate || 0)}
+                  Total: PKR {calculateSlotPrice(selectedSlot.startTime, selectedSlot.endTime, selectedTutor.tutorId.profile?.hourlyRate || 0)}
                 </Text>
               </View>
             )}
@@ -316,7 +320,7 @@ const TutorListScreen = () => {
           </View>
         </View>
       </Modal>
-    </View>
+    </PageContainer>
   );
 };
 

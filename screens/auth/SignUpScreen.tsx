@@ -5,11 +5,11 @@ import {
   ActivityIndicator,
   ScrollView,
   Image,
-  KeyboardAvoidingView,
 } from 'react-native';
 import { useState } from 'react';
 import { userService } from '../../services/userService';
 import AuthInput from '../../components/AuthInput';
+import { PageContainer } from '../../components/PageContainer';
 const googleIcon = require('../../assets/google-logo.png');
 
 const SignUpScreen = ({ navigation }: any) => {
@@ -35,10 +35,9 @@ const SignUpScreen = ({ navigation }: any) => {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={'padding'}
+    <PageContainer 
+      backgroundColor="#eff6ff"
       keyboardVerticalOffset={100}
-      className="flex-1 bg-blue-50"
     >
       <ScrollView
         keyboardShouldPersistTaps="handled"
@@ -157,7 +156,7 @@ const SignUpScreen = ({ navigation }: any) => {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </PageContainer>
   );
 };
 

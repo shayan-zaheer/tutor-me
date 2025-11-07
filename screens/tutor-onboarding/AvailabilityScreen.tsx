@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useEffect, useState } from 'react';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { PageContainer } from '../../components/PageContainer';
 import auth from '@react-native-firebase/auth';
 import 'react-native-get-random-values';
 import { DAYS_OF_WEEK, DayOfWeek } from '../../constants/days';
@@ -177,7 +178,8 @@ const AvailabilityScreen = () => {
   };
 
   return (
-    <View className="p-4 gap-y-4 flex-1">
+    <PageContainer>
+      <View className="p-4 gap-y-4 flex-1">
       <Text>
         Select a day and add the times you're available to tutor each week.
       </Text>
@@ -335,7 +337,8 @@ const AvailabilityScreen = () => {
           </View>
         </View>
       </Modal>
-    </View>
+      </View>
+    </PageContainer>
   );
 };
 
