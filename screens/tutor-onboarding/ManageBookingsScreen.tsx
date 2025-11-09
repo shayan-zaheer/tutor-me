@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  StyleSheet,
 } from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
 import auth from '@react-native-firebase/auth';
@@ -338,21 +339,18 @@ const ManageBookingsScreen = () => {
         <GestureDetector gesture={panGesture}>
           <Animated.View 
             style={[
-              {
-                flex: 1,
-                flexDirection: 'row',
-                width: SCREEN_WIDTH * 2,
-              },
+              styles.animatedContainer,
+              { width: SCREEN_WIDTH * 2 },
               animatedStyle
             ]}
           >
-            <View style={{ width: SCREEN_WIDTH }}>
-              <View style={{ paddingHorizontal: 16, flex: 1 }}>
+            <View style={[styles.tabContainer, { width: SCREEN_WIDTH }]}>
+              <View style={styles.contentContainer}>
                 {renderContent('upcoming')}
               </View>
             </View>
-            <View style={{ width: SCREEN_WIDTH }}>
-              <View style={{ paddingHorizontal: 16, flex: 1 }}>
+            <View style={[styles.tabContainer, { width: SCREEN_WIDTH }]}>
+              <View style={styles.contentContainer}>
                 {renderContent('completed')}
               </View>
             </View>
@@ -363,5 +361,18 @@ const ManageBookingsScreen = () => {
     </PageContainer>
   );
 };
+
+const styles = StyleSheet.create({
+  animatedContainer: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  tabContainer: {
+  },
+  contentContainer: {
+    paddingHorizontal: 16,
+    flex: 1,
+  },
+});
 
 export default ManageBookingsScreen;
