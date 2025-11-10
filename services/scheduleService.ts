@@ -1,8 +1,14 @@
 import firestore from '@react-native-firebase/firestore';
 import { scheduleRepository } from '../repos/scheduleRepository';
 import { populateReferences } from '../utils/populateReferences';
-import { getCurrentDate, timestampToDate } from '../utils/dateUtil';
-import { v4 as uuidv4 } from 'uuid';
+import { getCurrentDate, timestampToDate, getNextWeekdayOccurrence } from '../utils/dateUtil';
+import { checkTimeConflict } from '../utils/checkTimeConflict';
+import { bookingService } from './bookingService';
+
+const generateId = () => {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2);
+};
+
 
 export const scheduleService = {
   getTutorSchedules: async (userId: string) => {
@@ -30,15 +36,51 @@ export const scheduleService = {
       });
   },
 
+  getTutorSlotsFormatted: (userId: string, callback: (slots: any[]) => void) => {
+    const firestoreTutorReference = firestore().collection('users').doc(userId);
+    
+    return scheduleRepository
+      .getSchedulesByTutorId(firestoreTutorReference)
+      .onSnapshot((snapshot: any) => {
+        const data = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+        
+        const now = getCurrentDate();
+        const formattedSlots = data.flatMap((schedule: any) =>
+          schedule.slots?.filter((slot: any) => {
+            return timestampToDate(slot.startTime) >= now;
+          }).map((slot: any) => ({
+            id: slot.id || generateId(),
+            scheduleId: schedule.id,
+            time: `${timestampToDate(slot.startTime).toLocaleTimeString('en-GB', {
+              hour: '2-digit',
+              minute: '2-digit',
+            })} - ${timestampToDate(slot.endTime).toLocaleTimeString('en-GB', {
+              hour: '2-digit',
+              minute: '2-digit',
+            })}`,
+            day: timestampToDate(slot.startTime).toLocaleDateString('en-GB', { 
+              weekday: 'long' 
+            }),
+            difference: `${
+              timestampToDate(slot.endTime).getHours() -
+              timestampToDate(slot.startTime).getHours()
+            } hours`,
+            originalSlot: slot,
+          })) || []
+        );
+        
+        callback(formattedSlots);
+      });
+  },
+
   addTimeSlot: async (userId: string, slotData: {
     day: string;
     startTime: string;
     endTime: string;
+    hourlyRate?: number;
   }) => {
     const firestoreTutorReference = firestore().collection('users').doc(userId);
-    
-    const { getDateOccurrence } = await import('../utils/getDateOccurrence');
-    const targetDate = getDateOccurrence(slotData.day as any);
+    const targetDate = getNextWeekdayOccurrence(slotData.day as any);
     
     const startDate = new Date(targetDate);
     const endDate = new Date(targetDate);
@@ -48,21 +90,24 @@ export const scheduleService = {
     
     startDate.setHours(startHour, startMinute, 0, 0);
     endDate.setHours(endHour, endMinute, 0, 0);
-    
-    const hasConflict = await scheduleService.checkTimeConflict(
-      userId, 
-      startDate, 
-      endDate
+
+    await scheduleService.validateAvailabilityCreation(
+      userId,
+      targetDate,
+      startDate,
+      endDate,
+      slotData.hourlyRate
     );
-    
-    if (hasConflict) {
-      throw new Error('This time slot overlaps with an existing schedule.');
-    }
+
+    const durationMilliseconds = endDate.getTime() - startDate.getTime();
+    const durationHours = durationMilliseconds / (1000 * 60 * 60);
+    const price = slotData.hourlyRate! * durationHours;
     
     const newSlotData = {
-      id: uuidv4(),
+      id: generateId(),
       startTime: firestore.Timestamp.fromDate(startDate),
       endTime: firestore.Timestamp.fromDate(endDate),
+      price: price,
     };
     
     const snapshot = await scheduleRepository.getSchedulesByTutorId(firestoreTutorReference).get();
@@ -98,6 +143,70 @@ export const scheduleService = {
     await scheduleRepository.updateScheduleSlots(scheduleDocId, updatedSlots);
   },
 
+  deleteTimeSlotByDetails: async (userId: string, slotToDelete: { time: string, day: string }) => {
+    const firestoreTutorReference = firestore().collection('users').doc(userId);
+    const snapshot = await scheduleRepository.getSchedulesByTutorId(firestoreTutorReference).get();
+    
+    for (const doc of snapshot.docs) {
+      const schedule = doc.data();
+      const receivedSlots = schedule.slots || [];
+
+      const updatedSlots = receivedSlots.filter((slot: any) => {
+        const start = timestampToDate(slot.startTime).toLocaleTimeString('en-GB', {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        const end = timestampToDate(slot.endTime).toLocaleTimeString('en-GB', {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        const time = `${start} - ${end}`;
+        const day = timestampToDate(slot.startTime).toLocaleDateString('en-GB', { 
+          weekday: 'long' 
+        });
+
+        return !(time === slotToDelete.time && day === slotToDelete.day);
+      });
+
+      if (updatedSlots.length !== receivedSlots.length) {
+        await scheduleRepository.updateScheduleSlots(doc.id, updatedSlots);
+        return;
+      }
+    }
+  },
+
+  validateAvailabilityCreation: async (userId: string, targetDate: Date, startDate: Date, endDate: Date, hourlyRate?: number) => {
+    // Validate hourly rate
+    if (!hourlyRate || hourlyRate <= 0) {
+      throw new Error('Please set your hourly rate in your profile first.');
+    }
+
+    // Check if the selected time has already passed for today
+    const now = getCurrentDate();
+    const isToday = targetDate.toDateString() === now.toDateString();
+    if (isToday && startDate <= now) {
+      throw new Error('Cannot create a time slot for a time that has already passed today.');
+    }
+
+    // Check if tutor has existing schedule conflicts
+    const hasScheduleConflict = await scheduleService.checkTimeConflict(userId, startDate, endDate);
+    if (hasScheduleConflict) {
+      throw new Error('You already have an availability slot during this time period.');
+    }
+
+    // Check if tutor has student booking conflicts (tutor studying from someone else)
+    const hasStudentBookingConflict = await bookingService.checkStudentBookingConflict(
+      userId,
+      firestore.Timestamp.fromDate(startDate),
+      firestore.Timestamp.fromDate(endDate)
+    );
+    if (hasStudentBookingConflict) {
+      throw new Error('You have a learning session booked during this time. Please choose a different time slot.');
+    }
+
+    return true;
+  },
+
   checkTimeConflict: async (userId: string, startDate: Date, endDate: Date) => {
     const firestoreTutorReference = firestore().collection('users').doc(userId);
     const snapshot = await scheduleRepository.getSchedulesByTutorId(firestoreTutorReference).get();
@@ -108,11 +217,7 @@ export const scheduleService = {
         const existingStart = timestampToDate(slot.startTime);
         const existingEnd = timestampToDate(slot.endTime);
         
-        return (
-          (startDate >= existingStart && startDate < existingEnd) ||
-          (endDate > existingStart && endDate <= existingEnd) ||
-          (startDate <= existingStart && endDate >= existingEnd)
-        );
+        return checkTimeConflict(existingStart, existingEnd, startDate, endDate);
       })
     );
   },

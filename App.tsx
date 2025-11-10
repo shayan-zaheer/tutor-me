@@ -14,13 +14,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 const Stack = createNativeStackNavigator();
 
 export default function App() {
-  useEffect(() => {
-    SplashScreen.hide();
-  }, []);
-
   const navigationRef = useRef(null);
   const [initializing, setInitializing] = useState(true);
   const [user, setUser] = useState<FirebaseAuthTypes.User | null>(null);
+
+  useEffect(() => {
+    SplashScreen.hide();
+  }, []);
 
   const onAuthStateChanged = useCallback(
     (authUser: FirebaseAuthTypes.User | null) => {

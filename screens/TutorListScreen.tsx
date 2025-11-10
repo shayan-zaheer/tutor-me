@@ -132,7 +132,7 @@ const TutorListScreen = () => {
 
       Alert.alert(
         'Booking Confirmed!',
-        `Your session with ${selectedTutor.tutorId.name || 'the tutor'} on ${selectedSlot.day} has been booked.`,
+        `Your session with ${selectedTutor.tutorId.name || 'the tutor'} on ${selectedSlot.day} has been booked. His contact number is ${selectedTutor.tutorId?.contact}.`,
         [{ text: 'OK' }],
       );
 

@@ -9,26 +9,11 @@ import {
 } from 'react-native';
 import { useEffect, useState } from 'react';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { PageContainer } from '../../components/PageContainer';
 import auth from '@react-native-firebase/auth';
-import 'react-native-get-random-values';
+import { getNextWeekdayOccurrence } from '../../utils/dateUtil';
 import { DAYS_OF_WEEK, DayOfWeek } from '../../constants/days';
-import { 
-  formatTimeRange, 
-  timestampToDate, 
-  getCurrentDate,
-  formatDayName 
-} from '../../utils/dateUtil';
-import { getDateOccurrence } from '../../utils/getDateOccurrence';
+import { userService } from '../../services/userService';
 import { scheduleService } from '../../services/scheduleService';
-import { v4 as uuidv4 } from 'uuid';
-
-interface SlotWithId {
-  id: string;
-  startTime: any;
-  endTime: any;
-  scheduleDocId: string;
-}
 
 const AvailabilityScreen = () => {
   const [showModal, setModal] = useState<boolean>(false);
@@ -42,59 +27,56 @@ const AvailabilityScreen = () => {
     endTime: '',
   });
   const [slots, setSlots] = useState<Array<any>>([]);
-  const [slotsWithMetadata, setSlotsWithMetadata] = useState<SlotWithId[]>([]);
+  const [user, setUser] = useState<any>(null);
   const currentUser = auth().currentUser;
 
-  const deleteSlot = async (slotId: string) => {
-    try {
-      const slotToDelete = slotsWithMetadata.find(slot => slot.id === slotId);
-      if (!slotToDelete) {
-        console.error('Slot not found');
-        return;
-      }
+  const calculateSlotPrice = () => {
+    if (!newSlot.startTime || !newSlot.endTime || !user?.profile?.hourlyRate) {
+      return 0;
+    }
 
-      await scheduleService.deleteTimeSlot(slotId, slotToDelete.scheduleDocId);
+    const [startHour, startMinute] = newSlot.startTime.split(':').map(Number);
+    const [endHour, endMinute] = newSlot.endTime.split(':').map(Number);
+    
+    const startTotalMinutes = startHour * 60 + startMinute;
+    const endTotalMinutes = endHour * 60 + endMinute;
+    const durationHours = (endTotalMinutes - startTotalMinutes) / 60;
+    
+    return user.profile.hourlyRate * durationHours;
+  };
+
+  useEffect(() => {
+    if (!currentUser?.uid) return;
+
+    const unsubscribe = userService.getUserProfileRealTime(
+      currentUser.uid,
+      (profile) => {
+        if (profile) {
+          setUser(profile);
+        }
+      }
+    );
+
+    return () => unsubscribe();
+  }, [currentUser?.uid]);
+
+  const deleteSlot = async (scheduleId: string, slotToDelete: any) => {
+    try {
+      if (!currentUser?.uid) return;
+      await scheduleService.deleteTimeSlotByDetails(currentUser.uid, slotToDelete);
     } catch (error) {
       console.error('Error deleting slot:', error);
+      Alert.alert('Error', 'Failed to delete time slot');
     }
   };
 
   useEffect(() => {
     if (!currentUser?.uid) return;
 
-    const unsubscribe = scheduleService.getTutorSchedulesRealTime(
+    const unsubscribe = scheduleService.getTutorSlotsFormatted(
       currentUser.uid,
-      (data) => {
-        const now = getCurrentDate();
-        const slotsMetadata: SlotWithId[] = [];
-        
-        const refined = data.flatMap((schedule: any) =>
-          schedule.slots?.filter((slot: any) => {
-            return timestampToDate(slot.startTime) >= now;
-          }).map((slot: any) => {
-            const slotId = slot.id || uuidv4();
-            
-            slotsMetadata.push({
-              id: slotId,
-              startTime: slot.startTime,
-              endTime: slot.endTime,
-              scheduleDocId: schedule.id,
-            });
-
-            return {
-              id: slotId,
-              time: formatTimeRange(slot.startTime, slot.endTime),
-              day: formatDayName(slot.startTime, 'long'),
-              difference: `${
-                +timestampToDate(slot.endTime).getHours() -
-                +timestampToDate(slot.startTime).getHours()
-              } hours`,
-            };
-          }),
-        );
-
-        setSlotsWithMetadata(slotsMetadata);
-        setSlots(refined);
+      (formattedSlots) => {
+        setSlots(formattedSlots);
       }
     );
 
@@ -112,7 +94,7 @@ const AvailabilityScreen = () => {
           <Text className="text-gray-400">{item.difference}</Text>
         </View>
       </View>
-      <TouchableOpacity onPress={() => deleteSlot(item.id)}>
+      <TouchableOpacity onPress={() => deleteSlot(item.id, item)}>
         <Icon name="trash" size={20} color="#000" />
       </TouchableOpacity>
     </View>
@@ -161,6 +143,7 @@ const AvailabilityScreen = () => {
         day: newSlot.day,
         startTime: newSlot.startTime,
         endTime: newSlot.endTime,
+        hourlyRate: user?.profile?.hourlyRate,
       });
 
       setModal(false);
@@ -169,17 +152,13 @@ const AvailabilityScreen = () => {
         startTime: '',
         endTime: '',
       });
-    } catch (error) {
-      Alert.alert(
-        'Error',
-        error instanceof Error ? error.message : 'Failed to add time slot',
-      );
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to add time slot');
     }
   };
 
   return (
-    <PageContainer>
-      <View className="p-4 gap-y-4 flex-1">
+    <View className="p-4 gap-y-4 flex-1">
       <Text>
         Select a day and add the times you're available to tutor each week.
       </Text>
@@ -312,10 +291,21 @@ const AvailabilityScreen = () => {
               </ScrollView>
             </View>
 
-            <Text className="text-center font-semibold mb-4">
+            <Text className="text-center font-semibold mb-2">
               The date is{' '}
-              {getDateOccurrence(newSlot.day).toLocaleDateString('en-GB')}
+              {getNextWeekdayOccurrence(newSlot.day).toLocaleDateString('en-GB')}
             </Text>
+
+            {newSlot.startTime && newSlot.endTime && user?.profile?.hourlyRate && (
+              <View className="bg-gray-50 p-3 rounded-lg mb-4">
+                <Text className="text-center font-semibold text-teal-600">
+                  Price: PKR {calculateSlotPrice().toFixed(0)}
+                </Text>
+                <Text className="text-center text-xs text-gray-500 mt-1">
+                  Based on your hourly rate of PKR {user.profile.hourlyRate}/hour
+                </Text>
+              </View>
+            )}
 
             <View className="flex-row justify-between">
               <TouchableOpacity
@@ -337,8 +327,7 @@ const AvailabilityScreen = () => {
           </View>
         </View>
       </Modal>
-      </View>
-    </PageContainer>
+    </View>
   );
 };
 

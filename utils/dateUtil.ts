@@ -210,6 +210,25 @@ export const calculateSlotPrice = (
   return Math.round(durationHours * hourlyRate);
 };
 
+export const getNextWeekdayOccurrence = (dayName: string): Date => {
+  const jsWeekDays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  
+  const today = new Date();
+  const todayIndex = today.getDay();
+  const targetIndex = jsWeekDays.indexOf(dayName);
+
+  if (targetIndex === -1) {
+    throw new Error(`Invalid day name: ${dayName}`);
+  }
+
+  let diff = targetIndex - todayIndex;
+  if (diff < 0) diff += 7;
+
+  const nextDate = new Date(today);
+  nextDate.setDate(today.getDate() + diff);
+  return nextDate;
+};
+
 export default {
   timestampToDate,
   timestampToMillis,
@@ -232,4 +251,5 @@ export default {
   compareDates,
   sortBookingsByDate,
   calculateSlotPrice,
+  getNextWeekdayOccurrence,
 };

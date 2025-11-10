@@ -7,7 +7,10 @@ import { userService } from '../../services/userService';
 import { PageContainer } from '../../components/PageContainer';
 
 const ContactInfoScreen = () => {
+  const [number, setNumber] = useState<string>('');
+  const [selected, setSelected] = useState<string | null>(null);
   const currentUser = auth().currentUser;
+
   useEffect(() => {
     if (!currentUser?.uid) return;
 
@@ -31,9 +34,6 @@ const ContactInfoScreen = () => {
       console.error('Error saving contact info:', err);
     }
   };
-
-  const [number, setNumber] = useState<string>('');
-  const [selected, setSelected] = useState<string | null>(null);
   const methods = [
     {
       name: 'Phone Number',

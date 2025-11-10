@@ -3,6 +3,7 @@ import { bookingRepository } from '../repos/bookingRepository';
 import { userRepository } from '../repos/userRepository';
 import { populateReferences } from '../utils/populateReferences';
 import { timestampToDate } from '../utils/dateUtil';
+import { checkTimeConflict } from '../utils/checkTimeConflict';
 
 export const bookingService = {
   getStudentBookings: (userId: string) => {
@@ -30,6 +31,62 @@ export const bookingService = {
       
       return unsubscribe;
     });
+  },
+
+  getStudentBookingsRealTime: (userId: string, callback: (bookings: any[]) => void) => {
+    const firestoreStudentReference = firestore().collection('users').doc(userId);
+    let populatedBookingsCache: { [key: string]: any } = {};
+    
+    return bookingRepository
+      .getBookingsByStudentId(firestoreStudentReference)
+      .onSnapshot(
+        async (snapshot) => {
+          try {
+            const bookingsToPopulate: any[] = [];
+            const currentBookings: any[] = [];
+
+            snapshot.docs.forEach((doc) => {
+              const bookingData = { id: doc.id, ...doc.data() };
+              const cached = populatedBookingsCache[doc.id];
+              
+              if (!cached || 
+                  (cached as any)?.rating !== (bookingData as any)?.rating || 
+                  (cached as any)?.review !== (bookingData as any)?.review) {
+                bookingsToPopulate.push(bookingData);
+              } else {
+                currentBookings.push(cached);
+              }
+            });
+
+            if (bookingsToPopulate.length > 0) {
+              const newPopulatedBookings = await Promise.all(
+                bookingsToPopulate.map(async (booking) => {
+                  const populated = await populateReferences(booking);
+                  populatedBookingsCache[booking.id] = populated;
+                  return populated;
+                })
+              );
+              currentBookings.push(...newPopulatedBookings);
+            }
+
+            const currentBookingIds = snapshot.docs.map(doc => doc.id);
+            Object.keys(populatedBookingsCache).forEach(cachedId => {
+              if (!currentBookingIds.includes(cachedId)) {
+                delete populatedBookingsCache[cachedId];
+              }
+            });
+
+            callback(currentBookings);
+          } catch (err) {
+            console.error('Error in real-time bookings listener:', err);
+            callback([]);
+          }
+        },
+        (error) => {
+          console.error('Bookings listener error:', error);
+          callback([]);
+        }
+      );
   },
 
   getTutorBookings: (userId: string) => {
@@ -93,13 +150,14 @@ export const bookingService = {
   },
 
   submitRating: async (bookingId: string, rating: number, review: string, tutorId: string) => {
-    await bookingRepository.updateBookingRating(bookingId, rating, review);
-
-    const tutorDoc = await userRepository.getUserById(tutorId);
+    const [, tutorDoc] = await Promise.all([
+      bookingRepository.updateBookingRating(bookingId, rating, review),
+      userRepository.getUserById(tutorId)
+    ]);
     
     if (tutorDoc.exists()) {
       const tutorData = tutorDoc.data();
-      const currentRating = tutorData?.profile?.rating || 0;
+      const currentRating = tutorData?.profile?.ratings || 0;
       const currentTotalReviews = tutorData?.profile?.totalReviews || 0;
 
       const newTotalReviews = currentTotalReviews + 1;
@@ -126,11 +184,7 @@ export const bookingService = {
         const newStart = timestampToDate(startTime);
         const newEnd = timestampToDate(endTime);
 
-        return (
-          (newStart >= existingStart && newStart < existingEnd) ||
-          (newEnd > existingStart && newEnd <= existingEnd) ||
-          (newStart <= existingStart && newEnd >= existingEnd)
-        );
+        return checkTimeConflict(existingStart, existingEnd, newStart, newEnd);
       }
       return false;
     });
@@ -153,11 +207,7 @@ export const bookingService = {
           const newStart = timestampToDate(startTime);
           const newEnd = timestampToDate(endTime);
 
-          return (
-            (newStart >= existingStart && newStart < existingEnd) ||
-            (newEnd > existingStart && newEnd <= existingEnd) ||
-            (newStart <= existingStart && newEnd >= existingEnd)
-          );
+          return checkTimeConflict(existingStart, existingEnd, newStart, newEnd);
         });
       }
       return false;

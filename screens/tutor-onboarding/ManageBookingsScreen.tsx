@@ -124,11 +124,6 @@ const ManageBookingsScreen = () => {
                 <Text className="text-xl font-bold text-gray-800">
                   {booking.student?.name ?? 'Unknown Student'}
                 </Text>
-                {needsCompletion && (
-                  <View className="ml-2 bg-orange-500 rounded-full px-2 py-1">
-                    <Text className="text-white text-xs font-semibold">Mark Complete</Text>
-                  </View>
-                )}
               </View>
 
               <View className="flex-row items-center mb-1">

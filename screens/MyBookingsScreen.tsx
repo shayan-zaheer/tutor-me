@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -24,12 +24,10 @@ import { GestureHandlerRootView, GestureDetector } from 'react-native-gesture-ha
 import Animated from 'react-native-reanimated';
 import { useTabGesture } from '../hooks/useTabGesture';
 
-const BookingSections = ({ bookings, renderBookingCard, tab, isLoading, onRefresh }: { 
+const BookingSections = ({ bookings, renderBookingCard, tab }: { 
   bookings: Booking[], 
   renderBookingCard: ({ item }: { item: any }) => React.JSX.Element,
   tab: 'upcoming' | 'completed',
-  isLoading: boolean,
-  onRefresh: () => void,
 }) => {
   const now = getCurrentDate();
   const upcomingBookings = sortBookingsByDate(bookings.filter(
@@ -75,8 +73,6 @@ const BookingSections = ({ bookings, renderBookingCard, tab, isLoading, onRefres
       keyExtractor={item => (item as any).key || (item as any).id}
       renderItem={renderItem}
       showsVerticalScrollIndicator={false}
-      refreshing={isLoading}
-      onRefresh={onRefresh}
       className="pb-5"
     />
   );
@@ -89,31 +85,28 @@ const MyBookingsScreen = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [rating, setRating] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [review, setReview] = useState('');
   const currentUser = auth().currentUser;
 
   const { selectedTab, switchToTab, animatedStyle, panGesture, SCREEN_WIDTH } = useTabGesture();
 
-  const loadBookings = useCallback(() => {
+  useEffect(() => {
     if (!currentUser) return;
 
     setIsLoading(true);
 
-    bookingService.getStudentBookings(currentUser.uid)
-      .then((populatedBookings: any) => {
+    const unsubscribe = bookingService.getStudentBookingsRealTime(
+      currentUser.uid,
+      (populatedBookings) => {
+        console.log('Real-time update received:', populatedBookings.length, 'bookings');
         setBookings(populatedBookings);
-        console.log('Populated Bookings:', populatedBookings);
         setIsLoading(false);
-      })
-      .catch((err) => {
-        console.error('Error loading bookings:', err);
-        setIsLoading(false);
-      });
-  }, [currentUser]);
+      }
+    );
 
-  useEffect(() => {
-    loadBookings();
-  }, [loadBookings]);
+    return () => unsubscribe();
+  }, [currentUser]);
 
   const deleteBooking = async (bookingId: string) => {
     try {
@@ -130,7 +123,7 @@ const MyBookingsScreen = () => {
 
   const handleRate = (booking: Booking) => {
     setSelectedBooking(booking);
-    setRating(booking.rating || booking.ratings || 0);
+    setRating(booking.rating || 0);
     setReview(booking.review || '');
     setShowRatingModal(true);
   };
@@ -146,6 +139,8 @@ const MyBookingsScreen = () => {
       return;
     }
 
+    setIsSubmittingRating(true);
+
     try {
       await bookingService.submitRating(
         selectedBooking.id,
@@ -154,11 +149,6 @@ const MyBookingsScreen = () => {
         (selectedBooking.tutor as any).id
       );
 
-      const updatedBookings = bookings.map(b =>
-        b.id === selectedBooking.id ? { ...b, rating, review } : b,
-      );
-
-      setBookings(updatedBookings);
       setShowRatingModal(false);
       setSelectedBooking(null);
       setRating(0);
@@ -168,6 +158,8 @@ const MyBookingsScreen = () => {
     } catch (error) {
       console.error('Error updating booking:', error);
       Alert.alert('Error', 'Failed to submit rating');
+    } finally {
+      setIsSubmittingRating(false);
     }
   };
 
@@ -205,13 +197,6 @@ const MyBookingsScreen = () => {
                 <Text className="text-xl font-bold text-gray-800 mb-1">
                   {booking.tutor?.name ?? 'Unknown Tutor'}
                 </Text>
-                {isPastBooking && (
-                  <View className="ml-2 px-2 py-1 bg-gray-300 rounded-full">
-                    <Text className="text-xs text-gray-600 font-semibold">
-                      PAST
-                    </Text>
-                  </View>
-                )}
               </View>
               <Text className="text-lg text-teal-600 font-semibold mb-2">
                 {booking.tutor?.profile?.speciality ?? 'No Speciality'}
@@ -367,8 +352,6 @@ const MyBookingsScreen = () => {
                       bookings={bookings} 
                       renderBookingCard={renderBookingCard}
                       tab="upcoming"
-                      isLoading={isLoading}
-                      onRefresh={loadBookings}
                     />
                   </View>
                 </View>
@@ -378,8 +361,6 @@ const MyBookingsScreen = () => {
                       bookings={bookings} 
                       renderBookingCard={renderBookingCard}
                       tab="completed"
-                      isLoading={isLoading}
-                      onRefresh={loadBookings}
                     />
                   </View>
                 </View>
@@ -430,10 +411,15 @@ const MyBookingsScreen = () => {
               <TouchableOpacity
                 className="bg-yellow-500 px-6 py-3 rounded-lg flex-1 ml-2"
                 onPress={submitRating}
+                disabled={isSubmittingRating}
               >
-                <Text className="text-white text-center font-semibold">
-                  Submit
-                </Text>
+                {isSubmittingRating ? (
+                  <ActivityIndicator color="white" size="small" />
+                ) : (
+                  <Text className="text-white text-center font-semibold">
+                    Submit
+                  </Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>

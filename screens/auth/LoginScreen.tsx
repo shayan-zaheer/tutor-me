@@ -87,7 +87,7 @@ const LoginScreen = ({ navigation }: any) => {
 
           <View className="flex-row items-center my-4">
             <View className="flex-1 h-px bg-gray-300" />
-            <Text className="mx-4 text-gray-500 font-medium bg-blue-50 px-2">
+            <Text className="mx-4 text-gray-500 font-medium px-2">
               OR
             </Text>
             <View className="flex-1 h-px bg-gray-300" />

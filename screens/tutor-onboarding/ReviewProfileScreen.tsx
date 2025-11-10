@@ -18,23 +18,27 @@ const ReviewProfileScreen = () => {
     { title: 'Computer Science', icon: 'laptop-outline' },
   ]
 
+  const [showModal, setShowModal] = useState<string | null>(null);
+  const [selectedSpeciality, setSelectedSpeciality] = useState<string>(
+    'Select your speciality',
+  );
+  const [user, setUser] = useState<any>(null);
   const currentUser = auth().currentUser;
+
   useEffect(() => {
     if (!currentUser?.uid) return;
 
-    const loadUserProfile = async () => {
-      try {
-        const profile = await userService.getUserProfile(currentUser.uid);
+    const unsubscribe = userService.getUserProfileRealTime(
+      currentUser.uid,
+      (profile) => {
         if (profile) {
           setUser(profile);
           setSelectedSpeciality(profile?.profile?.speciality || 'Select your speciality');
         }
-      } catch (error) {
-        console.error('Error loading user profile:', error);
       }
-    };
+    );
 
-    loadUserProfile();
+    return () => unsubscribe();
   }, [currentUser?.uid]);
 
   const handleProfileSave = async () => {
@@ -129,11 +133,6 @@ const ReviewProfileScreen = () => {
     ]);
   };
 
-  const [showModal, setShowModal] = useState<string | null>(null);
-  const [selectedSpeciality, setSelectedSpeciality] = useState<string>(
-    'Select your speciality',
-  );
-  const [user, setUser] = useState<any>(null);
   return (
     <PageContainer>
       <View className="p-4 gap-y-4 flex-1">
@@ -146,7 +145,7 @@ const ReviewProfileScreen = () => {
           <View className="ml-3 gap-y-2 flex-1">
             <Text className="text-lg">Expertise</Text>
             <Text className="text-gray-500">
-              {user?.profile?.speciality || 'Not set'}
+              {user?.profile?.speciality}
             </Text>
           </View>
         </View>

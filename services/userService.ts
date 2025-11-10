@@ -198,6 +198,31 @@ const updateUserProfileService = async (userId: string, updates: any) => {
     }
 };
 
+const getUserProfileRealTime = (userId: string, callback: (profile: any) => void) => {
+    try {
+        const unsubscribe = firestore()
+            .collection('users')
+            .doc(userId)
+            .onSnapshot(
+                (doc) => {
+                    if (doc.exists()) {
+                        callback(doc.data());
+                    } else {
+                        callback(null);
+                    }
+                },
+                (error) => {
+                    console.error('Error listening to user profile:', error);
+                    callback(null);
+                }
+            );
+        return unsubscribe;
+    } catch (error) {
+        console.error('Error setting up user profile listener:', error);
+        return () => {};
+    }
+};
+
 export const userService = {
     signInWithEmailAndPassword: signInWithEmailAndPasswordService,
     signInWithGoogle: signInWithGoogleService,
@@ -207,6 +232,7 @@ export const userService = {
     updateUserContactInfo,
     updateUserProfile: updateUserProfileService,
     getUserProfile,
+    getUserProfileRealTime,
     getAllTutors,
     getTutorStats,
 };

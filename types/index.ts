@@ -55,6 +55,7 @@ export interface User {
   id: string;
   name?: string;
   email: string | null;
+  contact?: string;
   profile?: Profile;
   createdAt: FirebaseFirestoreTypes.Timestamp;
   lastLoginAt: FirebaseFirestoreTypes.Timestamp;
